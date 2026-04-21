@@ -41,6 +41,7 @@ const TestSession = () => {
   const [xpEarned, setXpEarned] = useState(0);
   const [completed, setCompleted] = useState({ correct: 0, total: 0, seconds: 0 });
   const wrapRef = useRef<HTMLDivElement>(null);
+  const currentLimit = m === "full" ? (module === 1 ? 64 * 60 : 70 * 60) : MODULE_LIMIT[m];
 
   const loadQuestions = async (bias: "balanced" | "easier" | "harder", targetModule = module) => {
     setLoading(true);
@@ -107,14 +108,14 @@ const TestSession = () => {
   // Silent timer
   useEffect(() => {
     if (done || loading) return;
-    const t = setInterval(() => setSessionTime((s) => Math.min(s + 1, MODULE_LIMIT[m])), 1000);
+    const t = setInterval(() => setSessionTime((s) => Math.min(s + 1, currentLimit)), 1000);
     return () => clearInterval(t);
-  }, [done, loading]);
+  }, [done, loading, currentLimit]);
 
   useEffect(() => {
-    if (!loading && !done && sessionTime >= MODULE_LIMIT[m]) void goNext();
+    if (!loading && !done && sessionTime >= currentLimit) void goNext();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionTime, loading, done, m]);
+  }, [sessionTime, loading, done, m, currentLimit]);
 
   useEffect(() => {
     setQStart(Date.now());
@@ -203,8 +204,8 @@ const TestSession = () => {
           </div>
           <h2 className="font-display text-3xl font-bold">Mission Complete</h2>
           <p className="text-muted-foreground mt-2 text-sm">
-            You answered <span className="text-foreground font-semibold">{correct}</span> of {total} correctly
-            in <span className="font-mono">{fmtTime(sessionTime)}</span>.
+            You answered <span className="text-foreground font-semibold">{correct + completed.correct}</span> of {total + completed.total} correctly
+            in <span className="font-mono">{fmtTime(sessionTime + completed.seconds)}</span>.
           </p>
           <div className="mt-4 text-xs text-secondary">
             +{xpEarned} XP · Mistakes routed to your Vault
@@ -238,7 +239,7 @@ const TestSession = () => {
             </div>
             <div className="flex items-center gap-4 text-xs font-mono text-muted-foreground">
               <span className="flex items-center gap-1.5">
-                <Clock className="h-3.5 w-3.5" /> {fmtTime(Math.max(0, MODULE_LIMIT[m] - sessionTime))}
+                <Clock className="h-3.5 w-3.5" /> {fmtTime(Math.max(0, currentLimit - sessionTime))}
               </span>
               <span>{idx + 1} / {questions.length}</span>
               <button onClick={() => nav("/practice")} className="p-1.5 rounded hover:bg-muted" aria-label="Exit">
