@@ -26,7 +26,7 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { mode = "full", count = 6, difficultyBias = "balanced" } = await req
+    const { mode = "full", count = 6, difficultyBias = "balanced", topic, section } = await req
       .json()
       .catch(() => ({}));
 
@@ -34,8 +34,11 @@ Deno.serve(async (req) => {
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
 
     let sectionInstruction = "";
-    if (mode === "math") sectionInstruction = "Section must be exactly 'Math'.";
+    if (section === "Math") sectionInstruction = "Section must be exactly 'Math'.";
+    else if (section === "Reading & Writing") sectionInstruction = "Section must be exactly 'Reading & Writing'.";
+    else if (mode === "math") sectionInstruction = "Section must be exactly 'Math'.";
     else if (mode === "reading") sectionInstruction = "Section must be exactly 'Reading & Writing'.";
+    else if (mode === "redemption") sectionInstruction = "Use the section that best fits the target topic.";
     else sectionInstruction = "Mix sections roughly evenly between 'Math' and 'Reading & Writing'.";
 
     let diffInstruction = "";
@@ -45,7 +48,8 @@ Deno.serve(async (req) => {
 
     const systemPrompt = `You are an expert SAT tutor creating ORIGINAL practice questions. Never copy from College Board, Bluebook, or official PSAT/SAT releases. Each question must be wholly your own invention. Topics for Math: ${TOPICS_MATH.join(", ")}. Topics for Reading & Writing: ${TOPICS_RW.join(", ")}. Reading questions must include a short original passage (40-90 words). Each question has exactly 4 choices and one correct index 0-3. Explanations must be concise (1-3 sentences) and teach the underlying concept.`;
 
-    const userPrompt = `Generate ${count} original SAT-style multiple-choice questions. ${sectionInstruction} ${diffInstruction} Vary topics. Use the provided tool to return them.`;
+    const topicInstruction = topic ? `Focus every question on this skill/topic: ${topic}.` : "Vary topics.";
+    const userPrompt = `Generate ${count} original SAT-style multiple-choice questions. ${sectionInstruction} ${diffInstruction} ${topicInstruction} Use actual newline characters for multi-line math or passages, never escaped literal \\n text. Use the provided tool to return them.`;
 
     const aiResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
