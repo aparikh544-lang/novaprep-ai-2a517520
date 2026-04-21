@@ -1,7 +1,9 @@
+import { useMemo } from "react";
 import { CalendarDays, Clock, Flame, Brain, RefreshCw } from "lucide-react";
 import { AppLayout } from "@/components/AppLayout";
 import { GlassCard } from "@/components/GlassCard";
-import { FLIGHT_PLAN, DayFocus } from "@/lib/novaprep-data";
+import { useNova } from "@/lib/novaprep-store";
+import { buildFlightPlan, DayFocus } from "@/lib/flight-plan";
 
 const focusMeta: Record<DayFocus, { color: string; icon: any; desc: string }> = {
   "Concept Fix": {
@@ -22,13 +24,14 @@ const focusMeta: Record<DayFocus, { color: string; icon: any; desc: string }> = 
 };
 
 const DailyPlan = () => {
+  const mistakes = useNova((s) => s.mistakes);
+  const plan = useMemo(() => buildFlightPlan(mistakes), [mistakes]);
+
   return (
     <AppLayout>
       <div className="flex items-end justify-between mb-8">
         <div>
-          <span className="text-xs uppercase tracking-[0.25em] text-secondary">
-            Flight Plan
-          </span>
+          <span className="text-xs uppercase tracking-[0.25em] text-secondary">Flight Plan</span>
           <h1 className="font-display text-4xl font-bold mt-1">Your 5-Day Route</h1>
           <p className="text-muted-foreground mt-2 max-w-2xl">
             The plan recalibrates after every test. Failed topics schedule a Concept Lesson
@@ -41,7 +44,7 @@ const DailyPlan = () => {
       </div>
 
       <div className="space-y-4">
-        {FLIGHT_PLAN.map((day, i) => {
+        {plan.map((day, i) => {
           const meta = focusMeta[day.focus];
           const Icon = meta.icon;
           return (
@@ -52,7 +55,9 @@ const DailyPlan = () => {
                     <CalendarDays className="h-3.5 w-3.5" />
                     {day.day}
                   </div>
-                  <div className={`mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-xs font-medium ${meta.color}`}>
+                  <div
+                    className={`mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-xs font-medium ${meta.color}`}
+                  >
                     <Icon className="h-3 w-3" />
                     {day.focus}
                   </div>
@@ -66,12 +71,8 @@ const DailyPlan = () => {
                       key={j}
                       className="p-3 rounded-lg bg-background/40 border border-border/60"
                     >
-                      <div className="text-[11px] font-mono text-secondary">
-                        {b.duration} MIN
-                      </div>
-                      <div className="text-sm mt-1 font-medium leading-snug">
-                        {b.task}
-                      </div>
+                      <div className="text-[11px] font-mono text-secondary">{b.duration} MIN</div>
+                      <div className="text-sm mt-1 font-medium leading-snug">{b.task}</div>
                     </div>
                   ))}
                 </div>

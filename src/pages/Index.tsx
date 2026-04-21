@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { Link } from "react-router-dom";
 import {
   ArrowRight,
@@ -10,23 +11,31 @@ import {
 import { AppLayout } from "@/components/AppLayout";
 import { GlassCard } from "@/components/GlassCard";
 import { useNova } from "@/lib/novaprep-store";
-import { FLIGHT_PLAN, rankFromXP } from "@/lib/novaprep-data";
+import { rankFromXP } from "@/lib/novaprep-data";
+import { buildFlightPlan } from "@/lib/flight-plan";
 
 const Dashboard = () => {
-  const xp = useNova((s) => s.xp);
-  const streak = useNova((s) => s.streak);
+  const profile = useNova((s) => s.profile);
   const mistakes = useNova((s) => s.mistakes);
+  const xp = profile?.xp ?? 0;
+  const streak = profile?.streak ?? 0;
   const info = rankFromXP(xp);
-  const today = FLIGHT_PLAN[0];
+  const plan = useMemo(() => buildFlightPlan(mistakes), [mistakes]);
+  const today = plan[0];
+
+  // Simple projected score: baseline 1200 + xp tilt, capped at 1600
+  const projected = Math.min(1600, 1200 + Math.round(xp / 12));
+  const targetSuffix = profile?.target_score ? ` / ${profile.target_score}` : "";
 
   return (
     <AppLayout>
       <div className="flex flex-col gap-2 mb-8">
-        <span className="text-xs uppercase tracking-[0.25em] text-secondary">
-          Mission Control
-        </span>
+        <span className="text-xs uppercase tracking-[0.25em] text-secondary">Mission Control</span>
         <h1 className="font-display text-4xl sm:text-5xl font-bold">
-          Welcome back, <span className="text-gradient-nebula">{info.rank}</span>
+          Welcome back,{" "}
+          <span className="text-gradient-nebula">
+            {profile?.display_name || info.rank}
+          </span>
         </h1>
         <p className="text-muted-foreground max-w-xl">
           Your Flight Plan is calibrated. Today's focus is{" "}
@@ -45,9 +54,9 @@ const Dashboard = () => {
         <GlassCard className="!p-5">
           <div className="flex items-center gap-2 text-xs uppercase tracking-widest text-muted-foreground">
             <TrendingUp className="h-3.5 w-3.5 text-success" />
-            Projected Score
+            Projected{targetSuffix}
           </div>
-          <div className="mt-2 font-display text-3xl font-bold">1480</div>
+          <div className="mt-2 font-display text-3xl font-bold">{projected}</div>
         </GlassCard>
         <GlassCard className="!p-5">
           <div className="flex items-center gap-2 text-xs uppercase tracking-widest text-muted-foreground">
@@ -72,9 +81,7 @@ const Dashboard = () => {
               <span className="text-xs uppercase tracking-widest text-muted-foreground">
                 Today's Routine
               </span>
-              <h2 className="font-display text-2xl font-semibold mt-1">
-                {today.focus}
-              </h2>
+              <h2 className="font-display text-2xl font-semibold mt-1">{today.focus}</h2>
             </div>
             <Link
               to="/plan"
@@ -98,9 +105,12 @@ const Dashboard = () => {
                     {b.duration} min focused block
                   </div>
                 </div>
-                <button className="text-xs px-3 py-1.5 rounded-md bg-primary/15 text-primary-glow border border-primary/30 hover:bg-primary/25 transition-colors">
+                <Link
+                  to="/practice"
+                  className="text-xs px-3 py-1.5 rounded-md bg-primary/15 text-primary-glow border border-primary/30 hover:bg-primary/25 transition-colors"
+                >
                   Start
-                </button>
+                </Link>
               </li>
             ))}
           </ul>
@@ -110,9 +120,7 @@ const Dashboard = () => {
           <span className="text-xs uppercase tracking-widest text-muted-foreground">
             Launch a session
           </span>
-          <h3 className="font-display text-2xl font-semibold mt-1">
-            Full SAT Simulation
-          </h3>
+          <h3 className="font-display text-2xl font-semibold mt-1">Full SAT Simulation</h3>
           <p className="text-sm text-muted-foreground mt-2 flex-1">
             Adaptive 2-module sections with silent pacing tracking. Module 2 difficulty
             calibrates to your Module 1 performance.

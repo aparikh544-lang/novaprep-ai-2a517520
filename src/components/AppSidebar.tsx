@@ -7,9 +7,11 @@ import {
   Bookmark,
   BarChart3,
   Rocket,
+  LogOut,
 } from "lucide-react";
 import { useNova } from "@/lib/novaprep-store";
 import { rankFromXP } from "@/lib/novaprep-data";
+import { useAuth } from "@/contexts/AuthContext";
 
 const items = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -21,7 +23,9 @@ const items = [
 ];
 
 export function AppSidebar() {
-  const xp = useNova((s) => s.xp);
+  const profile = useNova((s) => s.profile);
+  const { signOut } = useAuth();
+  const xp = profile?.xp ?? 0;
   const info = rankFromXP(xp);
   const pct =
     info.ceiling === info.floor
@@ -36,9 +40,7 @@ export function AppSidebar() {
             <Rocket className="h-5 w-5 text-white" />
           </div>
           <div>
-            <div className="font-display font-bold text-lg leading-none tracking-tight">
-              NovaPrep
-            </div>
+            <div className="font-display font-bold text-lg leading-none tracking-tight">NovaPrep</div>
             <div className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground mt-1">
               Adaptive · SAT
             </div>
@@ -97,6 +99,12 @@ export function AppSidebar() {
             Next: <span className="text-foreground/80">{info.next}</span>
           </div>
         </div>
+        <button
+          onClick={signOut}
+          className="mt-3 w-full inline-flex items-center justify-center gap-2 text-xs px-3 py-2 rounded-lg bg-muted/40 hover:bg-muted border border-border text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <LogOut className="h-3.5 w-3.5" /> Sign out
+        </button>
         <p className="mt-3 text-[10px] leading-relaxed text-muted-foreground/70 px-1">
           Independent practice platform; not affiliated with College Board.
         </p>
