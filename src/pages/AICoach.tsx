@@ -85,7 +85,8 @@ const AICoach = () => {
 
       <div className="grid md:grid-cols-2 gap-4">
         {lessons.map((l, i) => (
-          <GlassCard key={i} className="group cursor-pointer hover:scale-[1.01] transition-transform">
+          <Link key={i} to={`/test/redemption?topic=${encodeURIComponent(l.topic)}`} className="block">
+          <GlassCard className="group cursor-pointer hover:scale-[1.01] transition-transform h-full">
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-2 text-secondary text-xs">
                 <BookOpen className="h-3.5 w-3.5" />
@@ -103,6 +104,7 @@ const AICoach = () => {
               Begin lesson <ChevronRight className="h-4 w-4" />
             </div>
           </GlassCard>
+          </Link>
         ))}
       </div>
     </AppLayout>

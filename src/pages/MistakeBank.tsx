@@ -72,10 +72,10 @@ const MistakeBank = () => {
                 {m.time_spent}s
               </span>
               <button
-                onClick={() => nav("/test/redemption")}
+                 onClick={() => nav("/test/review")}
                 className="ml-auto inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-muted hover:bg-accent border border-border"
               >
-                <RotateCcw className="h-3 w-3" /> Redrill
+                 <RotateCcw className="h-3 w-3" /> Review
               </button>
             </div>
             {m.passage && (

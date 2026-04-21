@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { Link } from "react-router-dom";
 import { CalendarDays, Clock, Flame, Brain, RefreshCw } from "lucide-react";
 import { AppLayout } from "@/components/AppLayout";
 import { GlassCard } from "@/components/GlassCard";
@@ -67,13 +68,14 @@ const DailyPlan = () => {
                 </div>
                 <div className="flex-1 grid sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
                   {day.blocks.map((b, j) => (
-                    <div
+                    <Link
                       key={j}
+                      to={`/test/${day.focus === "Time Management" ? "reading" : day.focus === "Redemption" ? "redemption" : "math"}?topic=${encodeURIComponent(b.task)}`}
                       className="p-3 rounded-lg bg-background/40 border border-border/60"
                     >
                       <div className="text-[11px] font-mono text-secondary">{b.duration} MIN</div>
                       <div className="text-sm mt-1 font-medium leading-snug">{b.task}</div>
-                    </div>
+                    </Link>
                   ))}
                 </div>
               </div>
