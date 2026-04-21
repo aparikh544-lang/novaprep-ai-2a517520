@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Clock, Flag, X, ChevronRight, Check, Rocket, Loader2 } from "lucide-react";
 import { Question, ErrorReason } from "@/lib/novaprep-data";
 import { useNova } from "@/lib/novaprep-store";
@@ -14,20 +14,20 @@ function fmtTime(s: number) {
   return `${m}:${r.toString().padStart(2, "0")}`;
 }
 
-const MODULE_SIZE: Record<Mode, number> = {
-  full: 6,
-  reading: 6,
-  math: 6,
-  redemption: 5,
-};
+const MODULE_SIZE: Record<Mode, number> = { full: 54, reading: 27, math: 22, redemption: 12 };
+const MODULE_LIMIT: Record<Mode, number> = { full: 64 * 60, reading: 32 * 60, math: 35 * 60, redemption: 18 * 60 };
+
+const renderText = (text: string) => text.split(/\\n|\n/g).map((line, i) => <span key={i}>{line}{i < text.split(/\\n|\n/g).length - 1 && <br />}</span>);
 
 const TestSession = () => {
   const { mode = "full" } = useParams();
   const m = mode as Mode;
+  const [searchParams] = useSearchParams();
   const nav = useNavigate();
   const recordMistake = useNova((s) => s.recordMistake);
   const awardXP = useNova((s) => s.awardXP);
   const recordSession = useNova((s) => s.recordSession);
+  const resolveMistake = useNova((s) => s.resolveMistake);
   const mistakes = useNova((s) => s.mistakes);
 
   const [module, setModule] = useState<1 | 2>(1);
@@ -44,28 +44,14 @@ const TestSession = () => {
   const loadQuestions = async (bias: "balanced" | "easier" | "harder") => {
     setLoading(true);
     try {
-      // Redemption: re-cast hardest mistakes back as questions, fall back to live gen
-      if (m === "redemption" && mistakes.length > 0) {
-        const pool = mistakes.slice(0, MODULE_SIZE.redemption).map((mi, i): Question => ({
-          id: `redo-${mi.id}-${i}`,
-          section: mi.section as any,
-          topic: mi.topic,
-          difficulty: mi.difficulty,
-          prompt: mi.prompt,
-          passage: mi.passage ?? undefined,
-          choices: mi.choices,
-          correct: mi.correct_index,
-          explanation: mi.explanation ?? "",
-        }));
-        setQuestions(pool);
-      } else {
-        const qs = await generateQuestions({
-          mode: m,
-          count: MODULE_SIZE[m],
-          difficultyBias: bias,
-        });
-        setQuestions(qs);
-      }
+      const qs = await generateQuestions({
+        mode: m,
+        count: MODULE_SIZE[m],
+        difficultyBias: bias,
+        topic: searchParams.get("topic") ?? undefined,
+        section: m === "full" ? (module === 1 ? "Reading & Writing" : "Math") : undefined,
+      });
+      setQuestions(qs);
     } catch (e: any) {
       toast({
         title: "Question generation failed",
@@ -139,6 +125,8 @@ const TestSession = () => {
         elapsed > 90 ? "Time Pressure" : q.section === "Reading & Writing" ? "Misreading" : "Concept Gap";
       await recordMistake({ question: q, userChoice: choice, timeSpent: elapsed, reason });
     } else {
+      const sourceMistakeId = q.id.startsWith("redo-") ? q.id.split("-").slice(1, -1).join("-") : null;
+      if (sourceMistakeId) await resolveMistake(sourceMistakeId);
       await awardXP(q.difficulty);
       setXpEarned((x) => x + (q.difficulty === "hard" ? 25 : q.difficulty === "medium" ? 15 : 8));
     }
@@ -167,6 +155,7 @@ const TestSession = () => {
       setModule(2);
       setIdx(0);
       setAnswers({});
+      setSessionTime(0);
       await loadQuestions(harder ? "harder" : "easier");
       return;
     }
