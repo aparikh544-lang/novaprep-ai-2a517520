@@ -105,8 +105,8 @@ const Dashboard = () => {
                     {b.duration} min focused block
                   </div>
                 </div>
-                <Link
-                  to="/practice"
+                  <Link
+                    to={`/test/${today.focus === "Time Management" ? "reading" : today.focus === "Redemption" ? "redemption" : "math"}?topic=${encodeURIComponent(b.task)}`}
                   className="text-xs px-3 py-1.5 rounded-md bg-primary/15 text-primary-glow border border-primary/30 hover:bg-primary/25 transition-colors"
                 >
                   Start
