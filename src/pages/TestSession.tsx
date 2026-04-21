@@ -6,7 +6,7 @@ import { useNova } from "@/lib/novaprep-store";
 import { generateQuestions } from "@/lib/generate-questions";
 import { toast } from "@/hooks/use-toast";
 
-type Mode = "full" | "reading" | "math" | "redemption";
+type Mode = "full" | "reading" | "math" | "redemption" | "review";
 
 function fmtTime(s: number) {
   const m = Math.floor(s / 60);
@@ -14,8 +14,8 @@ function fmtTime(s: number) {
   return `${m}:${r.toString().padStart(2, "0")}`;
 }
 
-const MODULE_SIZE: Record<Mode, number> = { full: 54, reading: 27, math: 22, redemption: 12 };
-const MODULE_LIMIT: Record<Mode, number> = { full: 64 * 60, reading: 32 * 60, math: 35 * 60, redemption: 18 * 60 };
+const MODULE_SIZE: Record<Mode, number> = { full: 54, reading: 27, math: 22, redemption: 12, review: 10 };
+const MODULE_LIMIT: Record<Mode, number> = { full: 64 * 60, reading: 32 * 60, math: 35 * 60, redemption: 18 * 60, review: 15 * 60 };
 
 const renderText = (text: string) => text.split(/\\n|\n/g).map((line, i) => <span key={i}>{line}{i < text.split(/\\n|\n/g).length - 1 && <br />}</span>);
 
@@ -41,17 +41,32 @@ const TestSession = () => {
   const [xpEarned, setXpEarned] = useState(0);
   const wrapRef = useRef<HTMLDivElement>(null);
 
-  const loadQuestions = async (bias: "balanced" | "easier" | "harder") => {
+  const loadQuestions = async (bias: "balanced" | "easier" | "harder", targetModule = module) => {
     setLoading(true);
     try {
-      const qs = await generateQuestions({
-        mode: m,
-        count: MODULE_SIZE[m],
-        difficultyBias: bias,
-        topic: searchParams.get("topic") ?? undefined,
-        section: m === "full" ? (module === 1 ? "Reading & Writing" : "Math") : undefined,
-      });
-      setQuestions(qs);
+      if (m === "review" && mistakes.length > 0) {
+        setQuestions(mistakes.slice(0, MODULE_SIZE.review).map((mi, i): Question => ({
+          id: `redo-${mi.id}-${i}`,
+          section: mi.section as any,
+          topic: mi.topic,
+          difficulty: mi.difficulty,
+          prompt: mi.prompt,
+          passage: mi.passage ?? undefined,
+          choices: mi.choices,
+          correct: mi.correct_index,
+          explanation: mi.explanation ?? "",
+        })));
+      } else {
+        const fullSection = targetModule === 1 ? "Reading & Writing" : "Math";
+        const qs = await generateQuestions({
+          mode: m === "review" ? "redemption" : m,
+          count: m === "full" ? (targetModule === 1 ? 54 : 44) : MODULE_SIZE[m],
+          difficultyBias: bias,
+          topic: searchParams.get("topic") ?? undefined,
+          section: m === "full" ? fullSection : undefined,
+        });
+        setQuestions(qs);
+      }
     } catch (e: any) {
       toast({
         title: "Question generation failed",
@@ -156,7 +171,7 @@ const TestSession = () => {
       setIdx(0);
       setAnswers({});
       setSessionTime(0);
-      await loadQuestions(harder ? "harder" : "easier");
+      await loadQuestions(harder ? "harder" : "easier", 2);
       return;
     }
     const correct = Object.entries(answers).filter(([id, a]) => {
