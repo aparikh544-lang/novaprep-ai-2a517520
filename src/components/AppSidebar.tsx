@@ -21,7 +21,7 @@ const items = [
 
 export function AppSidebar() {
   const xp = useNova((s) => s.xp);
-  const info = useNova((s) => s.rankInfo());
+  const info = rankFromXP(xp);
   const pct =
     info.ceiling === info.floor
       ? 100
