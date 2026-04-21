@@ -14,7 +14,123 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      mistakes: {
+        Row: {
+          choices: Json
+          correct_index: number
+          created_at: string
+          difficulty: string
+          explanation: string | null
+          id: string
+          passage: string | null
+          prompt: string
+          reason: string
+          section: string
+          time_spent: number
+          topic: string
+          user_choice: number | null
+          user_id: string
+        }
+        Insert: {
+          choices: Json
+          correct_index: number
+          created_at?: string
+          difficulty: string
+          explanation?: string | null
+          id?: string
+          passage?: string | null
+          prompt: string
+          reason: string
+          section: string
+          time_spent?: number
+          topic: string
+          user_choice?: number | null
+          user_id: string
+        }
+        Update: {
+          choices?: Json
+          correct_index?: number
+          created_at?: string
+          difficulty?: string
+          explanation?: string | null
+          id?: string
+          passage?: string | null
+          prompt?: string
+          reason?: string
+          section?: string
+          time_spent?: number
+          topic?: string
+          user_choice?: number | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          display_name: string | null
+          id: string
+          streak: number
+          target_score: number | null
+          test_date: string | null
+          updated_at: string
+          xp: number
+        }
+        Insert: {
+          created_at?: string
+          display_name?: string | null
+          id: string
+          streak?: number
+          target_score?: number | null
+          test_date?: string | null
+          updated_at?: string
+          xp?: number
+        }
+        Update: {
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          streak?: number
+          target_score?: number | null
+          test_date?: string | null
+          updated_at?: string
+          xp?: number
+        }
+        Relationships: []
+      }
+      sessions: {
+        Row: {
+          created_at: string
+          duration_seconds: number
+          id: string
+          mode: string
+          score: number
+          total: number
+          user_id: string
+          xp_earned: number
+        }
+        Insert: {
+          created_at?: string
+          duration_seconds: number
+          id?: string
+          mode: string
+          score: number
+          total: number
+          user_id: string
+          xp_earned?: number
+        }
+        Update: {
+          created_at?: string
+          duration_seconds?: number
+          id?: string
+          mode?: string
+          score?: number
+          total?: number
+          user_id?: string
+          xp_earned?: number
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
