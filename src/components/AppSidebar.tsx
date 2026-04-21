@@ -9,6 +9,7 @@ import {
   Rocket,
 } from "lucide-react";
 import { useNova } from "@/lib/novaprep-store";
+import { rankFromXP } from "@/lib/novaprep-data";
 
 const items = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -21,7 +22,7 @@ const items = [
 
 export function AppSidebar() {
   const xp = useNova((s) => s.xp);
-  const info = useNova((s) => s.rankInfo());
+  const info = rankFromXP(xp);
   const pct =
     info.ceiling === info.floor
       ? 100
