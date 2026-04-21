@@ -9,6 +9,7 @@ import {
   Rocket,
 } from "lucide-react";
 import { useNova } from "@/lib/novaprep-store";
+import { rankFromXP } from "@/lib/novaprep-data";
 
 const items = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },

@@ -10,11 +10,13 @@ import {
 import { AppLayout } from "@/components/AppLayout";
 import { GlassCard } from "@/components/GlassCard";
 import { useNova } from "@/lib/novaprep-store";
-import { FLIGHT_PLAN } from "@/lib/novaprep-data";
+import { FLIGHT_PLAN, rankFromXP } from "@/lib/novaprep-data";
 
 const Dashboard = () => {
-  const { xp, streak, mistakes } = useNova();
-  const info = useNova((s) => s.rankInfo());
+  const xp = useNova((s) => s.xp);
+  const streak = useNova((s) => s.streak);
+  const mistakes = useNova((s) => s.mistakes);
+  const info = rankFromXP(xp);
   const today = FLIGHT_PLAN[0];
 
   return (
