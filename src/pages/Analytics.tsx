@@ -21,6 +21,8 @@ interface SessionRow {
   score: number;
   total: number;
   duration_seconds: number;
+  mode: string;
+  xp_earned: number;
 }
 
 const Analytics = () => {
@@ -33,7 +35,7 @@ const Analytics = () => {
     if (!user) return;
     supabase
       .from("sessions")
-      .select("created_at,score,total,duration_seconds")
+      .select("created_at,score,total,duration_seconds,mode,xp_earned")
       .eq("user_id", user.id)
       .order("created_at", { ascending: true })
       .limit(50)
@@ -73,6 +75,14 @@ const Analytics = () => {
   const hoursLogged = (totalSeconds / 3600).toFixed(1);
   const avgPace =
     totalAnswered > 0 ? Math.round(totalSeconds / totalAnswered) : 0;
+  const bestAccuracy = sessions.length ? Math.max(...sessions.map((s) => Math.round((s.score / Math.max(1, s.total)) * 100))) : 0;
+  const weeklyXP = sessions.slice(-7).reduce((a, s) => a + s.xp_earned, 0);
+
+  const modeData = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const s of sessions) counts.set(s.mode, (counts.get(s.mode) ?? 0) + 1);
+    return [...counts.entries()].map(([mode, count]) => ({ mode, count }));
+  }, [sessions]);
 
   const topicStrengths = useMemo(() => {
     const counts = new Map<string, number>();
@@ -145,6 +155,14 @@ const Analytics = () => {
               <span className="font-mono">{hoursLogged}</span>
             </li>
             <li className="flex justify-between">
+              <span className="text-muted-foreground">Best accuracy</span>
+              <span className="font-mono text-success">{bestAccuracy}%</span>
+            </li>
+            <li className="flex justify-between">
+              <span className="text-muted-foreground">7-session XP</span>
+              <span className="font-mono text-secondary">+{weeklyXP}</span>
+            </li>
+            <li className="flex justify-between">
               <span className="text-muted-foreground">Strongest</span>
               <span className="text-secondary truncate ml-2">{topicStrengths.strongest}</span>
             </li>
@@ -183,6 +201,35 @@ const Analytics = () => {
               </ResponsiveContainer>
             </div>
           )}
+        </GlassCard>
+
+        <GlassCard className="lg:col-span-2">
+          <h2 className="font-display text-xl font-semibold mb-4">Session Mix</h2>
+          <div className="h-56">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={modeData.length ? modeData : [{ mode: "none", count: 0 }]}> 
+                <CartesianGrid stroke="hsl(var(--border))" strokeDasharray="3 3" />
+                <XAxis dataKey="mode" stroke="hsl(var(--muted-foreground))" fontSize={12} />
+                <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} allowDecimals={false} />
+                <Tooltip contentStyle={{ background: "hsl(var(--popover))", border: "1px solid hsl(var(--border))", borderRadius: "8px" }} />
+                <Bar dataKey="count" fill="hsl(var(--secondary))" radius={[6, 6, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </GlassCard>
+
+        <GlassCard>
+          <h2 className="font-display text-xl font-semibold">Recent Sessions</h2>
+          <div className="mt-4 space-y-2">
+            {sessions.slice(-5).reverse().map((s, i) => (
+              <div key={`${s.created_at}-${i}`} className="flex items-center justify-between rounded-lg border border-border/60 bg-background/40 px-3 py-2 text-xs">
+                <span className="capitalize text-muted-foreground">{s.mode}</span>
+                <span className="font-mono">{s.score}/{s.total}</span>
+                <span className="text-secondary">+{s.xp_earned} XP</span>
+              </div>
+            ))}
+            {sessions.length === 0 && <p className="text-sm text-muted-foreground">No sessions yet.</p>}
+          </div>
         </GlassCard>
       </div>
     </AppLayout>

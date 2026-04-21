@@ -5,6 +5,8 @@ export interface GenerateOptions {
   mode: "full" | "math" | "reading" | "redemption";
   count?: number;
   difficultyBias?: "balanced" | "easier" | "harder";
+  topic?: string;
+  section?: "Math" | "Reading & Writing";
 }
 
 export async function generateQuestions(opts: GenerateOptions): Promise<Question[]> {

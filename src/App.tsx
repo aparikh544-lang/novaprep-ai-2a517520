@@ -15,6 +15,7 @@ import MistakeBank from "./pages/MistakeBank.tsx";
 import Analytics from "./pages/Analytics.tsx";
 import TestSession from "./pages/TestSession.tsx";
 import Auth from "./pages/Auth.tsx";
+import Profile from "./pages/Profile.tsx";
 
 const queryClient = new QueryClient();
 
@@ -34,6 +35,7 @@ const App = () => (
             <Route path="/coach" element={<RequireAuth><AICoach /></RequireAuth>} />
             <Route path="/mistakes" element={<RequireAuth><MistakeBank /></RequireAuth>} />
             <Route path="/analytics" element={<RequireAuth><Analytics /></RequireAuth>} />
+            <Route path="/profile" element={<RequireAuth><Profile /></RequireAuth>} />
             <Route path="/test/:mode" element={<RequireAuth><TestSession /></RequireAuth>} />
             <Route path="*" element={<NotFound />} />
           </Routes>

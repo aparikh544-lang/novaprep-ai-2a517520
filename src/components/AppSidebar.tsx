@@ -6,6 +6,7 @@ import {
   Sparkles,
   Bookmark,
   BarChart3,
+  UserCircle,
   Rocket,
   LogOut,
 } from "lucide-react";
@@ -20,6 +21,7 @@ const items = [
   { to: "/coach", label: "AI Coach", icon: Sparkles },
   { to: "/mistakes", label: "Mistake Bank", icon: Bookmark },
   { to: "/analytics", label: "Analytics", icon: BarChart3 },
+  { to: "/profile", label: "Profile", icon: UserCircle },
 ];
 
 export function AppSidebar() {

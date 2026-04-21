@@ -36,6 +36,7 @@ interface NovaState {
     duration: number;
     xpEarned: number;
   }) => Promise<void>;
+  resolveMistake: (id: string) => Promise<void>;
   reset: () => void;
 }
 
@@ -112,6 +113,11 @@ export const useNova = create<NovaState>((set, get) => ({
       duration_seconds: duration,
       xp_earned: xpEarned,
     });
+  },
+
+  resolveMistake: async (id) => {
+    const { error } = await supabase.from("mistakes").delete().eq("id", id);
+    if (!error) set((s) => ({ mistakes: s.mistakes.filter((m) => m.id !== id) }));
   },
 
   reset: () => set({ profile: null, mistakes: [], loading: false }),

@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Clock, Flag, X, ChevronRight, Check, Rocket, Loader2 } from "lucide-react";
 import { Question, ErrorReason } from "@/lib/novaprep-data";
 import { useNova } from "@/lib/novaprep-store";
 import { generateQuestions } from "@/lib/generate-questions";
 import { toast } from "@/hooks/use-toast";
 
-type Mode = "full" | "reading" | "math" | "redemption";
+type Mode = "full" | "reading" | "math" | "redemption" | "review";
 
 function fmtTime(s: number) {
   const m = Math.floor(s / 60);
@@ -14,20 +14,20 @@ function fmtTime(s: number) {
   return `${m}:${r.toString().padStart(2, "0")}`;
 }
 
-const MODULE_SIZE: Record<Mode, number> = {
-  full: 6,
-  reading: 6,
-  math: 6,
-  redemption: 5,
-};
+const MODULE_SIZE: Record<Mode, number> = { full: 54, reading: 27, math: 22, redemption: 12, review: 10 };
+const MODULE_LIMIT: Record<Mode, number> = { full: 64 * 60, reading: 32 * 60, math: 35 * 60, redemption: 18 * 60, review: 15 * 60 };
+
+const renderText = (text: string) => text.split(/\\n|\n/g).map((line, i) => <span key={i}>{line}{i < text.split(/\\n|\n/g).length - 1 && <br />}</span>);
 
 const TestSession = () => {
   const { mode = "full" } = useParams();
   const m = mode as Mode;
+  const [searchParams] = useSearchParams();
   const nav = useNavigate();
   const recordMistake = useNova((s) => s.recordMistake);
   const awardXP = useNova((s) => s.awardXP);
   const recordSession = useNova((s) => s.recordSession);
+  const resolveMistake = useNova((s) => s.resolveMistake);
   const mistakes = useNova((s) => s.mistakes);
 
   const [module, setModule] = useState<1 | 2>(1);
@@ -39,14 +39,15 @@ const TestSession = () => {
   const [qStart, setQStart] = useState<number>(Date.now());
   const [done, setDone] = useState(false);
   const [xpEarned, setXpEarned] = useState(0);
+  const [completed, setCompleted] = useState({ correct: 0, total: 0, seconds: 0 });
   const wrapRef = useRef<HTMLDivElement>(null);
+  const currentLimit = m === "full" ? (module === 1 ? 64 * 60 : 70 * 60) : MODULE_LIMIT[m];
 
-  const loadQuestions = async (bias: "balanced" | "easier" | "harder") => {
+  const loadQuestions = async (bias: "balanced" | "easier" | "harder", targetModule = module) => {
     setLoading(true);
     try {
-      // Redemption: re-cast hardest mistakes back as questions, fall back to live gen
-      if (m === "redemption" && mistakes.length > 0) {
-        const pool = mistakes.slice(0, MODULE_SIZE.redemption).map((mi, i): Question => ({
+      if (m === "review" && mistakes.length > 0) {
+        setQuestions(mistakes.slice(0, MODULE_SIZE.review).map((mi, i): Question => ({
           id: `redo-${mi.id}-${i}`,
           section: mi.section as any,
           topic: mi.topic,
@@ -56,13 +57,15 @@ const TestSession = () => {
           choices: mi.choices,
           correct: mi.correct_index,
           explanation: mi.explanation ?? "",
-        }));
-        setQuestions(pool);
+        })));
       } else {
+        const fullSection = targetModule === 1 ? "Reading & Writing" : "Math";
         const qs = await generateQuestions({
-          mode: m,
-          count: MODULE_SIZE[m],
+          mode: m === "review" ? "redemption" : m,
+          count: m === "full" ? (targetModule === 1 ? 54 : 44) : MODULE_SIZE[m],
           difficultyBias: bias,
+          topic: searchParams.get("topic") ?? undefined,
+          section: m === "full" ? fullSection : undefined,
         });
         setQuestions(qs);
       }
@@ -105,9 +108,14 @@ const TestSession = () => {
   // Silent timer
   useEffect(() => {
     if (done || loading) return;
-    const t = setInterval(() => setSessionTime((s) => s + 1), 1000);
+    const t = setInterval(() => setSessionTime((s) => Math.min(s + 1, currentLimit)), 1000);
     return () => clearInterval(t);
-  }, [done, loading]);
+  }, [done, loading, currentLimit]);
+
+  useEffect(() => {
+    if (!loading && !done && sessionTime >= currentLimit) void goNext();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionTime, loading, done, m, currentLimit]);
 
   useEffect(() => {
     setQStart(Date.now());
@@ -139,6 +147,8 @@ const TestSession = () => {
         elapsed > 90 ? "Time Pressure" : q.section === "Reading & Writing" ? "Misreading" : "Concept Gap";
       await recordMistake({ question: q, userChoice: choice, timeSpent: elapsed, reason });
     } else {
+      const sourceMistakeId = q.id.startsWith("redo-") ? q.id.split("-").slice(1, -1).join("-") : null;
+      if (sourceMistakeId) await resolveMistake(sourceMistakeId);
       await awardXP(q.difficulty);
       setXpEarned((x) => x + (q.difficulty === "hard" ? 25 : q.difficulty === "medium" ? 15 : 8));
     }
@@ -148,9 +158,9 @@ const TestSession = () => {
     setDone(true);
     await recordSession({
       mode: m,
-      score: correct,
-      total,
-      duration: sessionTime,
+      score: correct + completed.correct,
+      total: total + completed.total,
+      duration: sessionTime + completed.seconds,
       xpEarned,
     });
   };
@@ -164,10 +174,12 @@ const TestSession = () => {
       const correctCount = questions.filter((qq) => answers[qq.id] === qq.correct).length;
       const ratio = correctCount / questions.length;
       const harder = ratio >= 0.6;
+      setCompleted({ correct: correctCount, total: questions.length, seconds: sessionTime });
       setModule(2);
       setIdx(0);
       setAnswers({});
-      await loadQuestions(harder ? "harder" : "easier");
+      setSessionTime(0);
+      await loadQuestions(harder ? "harder" : "easier", 2);
       return;
     }
     const correct = Object.entries(answers).filter(([id, a]) => {
@@ -192,8 +204,8 @@ const TestSession = () => {
           </div>
           <h2 className="font-display text-3xl font-bold">Mission Complete</h2>
           <p className="text-muted-foreground mt-2 text-sm">
-            You answered <span className="text-foreground font-semibold">{correct}</span> of {total} correctly
-            in <span className="font-mono">{fmtTime(sessionTime)}</span>.
+            You answered <span className="text-foreground font-semibold">{correct + completed.correct}</span> of {total + completed.total} correctly
+            in <span className="font-mono">{fmtTime(sessionTime + completed.seconds)}</span>.
           </p>
           <div className="mt-4 text-xs text-secondary">
             +{xpEarned} XP · Mistakes routed to your Vault
@@ -227,7 +239,7 @@ const TestSession = () => {
             </div>
             <div className="flex items-center gap-4 text-xs font-mono text-muted-foreground">
               <span className="flex items-center gap-1.5">
-                <Clock className="h-3.5 w-3.5" /> {fmtTime(sessionTime)}
+                <Clock className="h-3.5 w-3.5" /> {fmtTime(Math.max(0, currentLimit - sessionTime))}
               </span>
               <span>{idx + 1} / {questions.length}</span>
               <button onClick={() => nav("/practice")} className="p-1.5 rounded hover:bg-muted" aria-label="Exit">
@@ -249,9 +261,9 @@ const TestSession = () => {
               {q.section} · {q.topic} · <span className="capitalize">{q.difficulty}</span>
             </div>
             {q.passage && (
-              <div className="glass p-5 mb-5 text-sm leading-relaxed text-foreground/90">{q.passage}</div>
+              <div className="glass p-5 mb-5 text-sm leading-relaxed text-foreground/90">{renderText(q.passage)}</div>
             )}
-            <h2 className="font-display text-xl sm:text-2xl font-semibold leading-snug">{q.prompt}</h2>
+            <h2 className="font-display text-xl sm:text-2xl font-semibold leading-snug">{renderText(q.prompt)}</h2>
 
             <div className="mt-6 space-y-2.5">
               {q.choices.map((c, i) => {
@@ -277,7 +289,7 @@ const TestSession = () => {
                     <span className="font-mono text-xs text-muted-foreground mt-0.5">
                       {String.fromCharCode(65 + i)}
                     </span>
-                    <span className="flex-1">{c}</span>
+                    <span className="flex-1">{renderText(c)}</span>
                     {showResult && isCorrect && <Check className="h-4 w-4 text-success" />}
                   </button>
                 );
@@ -287,7 +299,7 @@ const TestSession = () => {
             {answered && (
               <div className="mt-5 glass glass-cyan p-4 text-sm text-foreground/90 leading-relaxed animate-fade-in">
                 <div className="text-xs text-secondary uppercase tracking-widest mb-1">Coach</div>
-                {q.explanation}
+                {renderText(q.explanation)}
               </div>
             )}
           </div>
