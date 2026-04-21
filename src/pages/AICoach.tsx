@@ -1,36 +1,49 @@
+import { useMemo } from "react";
 import { Sparkles, ChevronRight, BookOpen } from "lucide-react";
+import { Link } from "react-router-dom";
 import { AppLayout } from "@/components/AppLayout";
 import { GlassCard } from "@/components/GlassCard";
-
-const lessons = [
-  {
-    topic: "Systems of Linear Equations",
-    summary:
-      "Why substitution beats elimination when one variable is already isolated, and how to spot 'no solution' systems instantly.",
-    duration: "12 min",
-    badge: "Recommended",
-  },
-  {
-    topic: "Inference vs. Main Idea",
-    summary:
-      "A 3-step framework for separating what the passage states from what it implies — without over-reading.",
-    duration: "9 min",
-  },
-  {
-    topic: "Quadratic Vertex Form",
-    summary:
-      "Convert between standard, factored, and vertex form fluently — and pick the form that answers the question.",
-    duration: "14 min",
-  },
-  {
-    topic: "Pacing: 75-Second Discipline",
-    summary:
-      "How to triage easy/medium/hard questions on a paced module without burning your time bank.",
-    duration: "8 min",
-  },
-];
+import { useNova } from "@/lib/novaprep-store";
 
 const AICoach = () => {
+  const mistakes = useNova((s) => s.mistakes);
+
+  const lessons = useMemo(() => {
+    // Build lesson list from real weak topics; recommend the topic with the most mistakes.
+    const counts = new Map<string, number>();
+    for (const m of mistakes) counts.set(m.topic, (counts.get(m.topic) ?? 0) + 1);
+    const ranked = [...counts.entries()].sort((a, b) => b[1] - a[1]);
+
+    if (ranked.length === 0) {
+      return [
+        {
+          topic: "SAT Strategy 101",
+          summary: "Pacing, triage, and how to avoid the most common time-traps on Module 1.",
+          duration: "10 min",
+          badge: "Start here",
+        },
+        {
+          topic: "Reading: 75-Second Discipline",
+          summary: "How to triage easy/medium/hard questions on a paced module without burning your time bank.",
+          duration: "8 min",
+        },
+      ];
+    }
+
+    return ranked.slice(0, 6).map(([topic, count], i) => ({
+      topic,
+      summary: `You missed ${count} ${count === 1 ? "question" : "questions"} on this topic. The Coach will walk through the underlying concept and reasoning patterns.`,
+      duration: `${8 + Math.min(8, count * 2)} min`,
+      badge: i === 0 ? "Recommended" : undefined,
+    }));
+  }, [mistakes]);
+
+  const dominantReason = useMemo(() => {
+    const r = { "Concept Gap": 0, "Time Pressure": 0, Misreading: 0 };
+    for (const m of mistakes) r[m.reason]++;
+    return Object.entries(r).sort((a, b) => b[1] - a[1])[0];
+  }, [mistakes]);
+
   return (
     <AppLayout>
       <div className="mb-8">
@@ -48,17 +61,24 @@ const AICoach = () => {
             <Sparkles className="h-5 w-5 text-white" />
           </div>
           <div className="flex-1">
-            <h2 className="font-display text-xl font-semibold">
-              Today's Coach Note
-            </h2>
+            <h2 className="font-display text-xl font-semibold">Today's Coach Note</h2>
             <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
-              You missed 2 of the last 3 questions on <span className="text-foreground font-medium">Systems of Linear Equations</span> —
-              both involved isolating a variable before substituting. Start with the
-              recommended lesson below; we've also queued 4 redrill questions in your Plan.
+              {mistakes.length === 0 ? (
+                <>Run your first session and the Coach will start tailoring lessons to your weak spots.</>
+              ) : (
+                <>
+                  Your dominant error pattern is{" "}
+                  <span className="text-foreground font-medium">{dominantReason[0]}</span> ({dominantReason[1]}{" "}
+                  occurrence{dominantReason[1] === 1 ? "" : "s"}). Start with the recommended lesson below.
+                </>
+              )}
             </p>
-            <button className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary-glow transition-colors">
-              Open recommended lesson <ChevronRight className="h-4 w-4" />
-            </button>
+            <Link
+              to="/practice"
+              className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary-glow transition-colors"
+            >
+              Begin focused session <ChevronRight className="h-4 w-4" />
+            </Link>
           </div>
         </div>
       </GlassCard>
