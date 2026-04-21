@@ -1,28 +1,118 @@
 import { create } from "zustand";
+import { supabase } from "@/integrations/supabase/client";
 import {
-  INITIAL_MISTAKES,
-  MistakeEntry,
+  MistakeRecord,
   Question,
-  QUESTIONS,
-  rankFromXP,
+  Difficulty,
+  ErrorReason,
+  xpForDifficulty,
 } from "./novaprep-data";
 
-interface NovaState {
+interface Profile {
+  id: string;
+  display_name: string | null;
+  target_score: number | null;
+  test_date: string | null;
   xp: number;
   streak: number;
-  mistakes: MistakeEntry[];
-  recordMistake: (m: MistakeEntry) => void;
-  awardXP: (amount: number) => void;
-  getQuestionById: (id: string) => Question | undefined;
-  rankInfo: () => ReturnType<typeof rankFromXP>;
+}
+
+interface NovaState {
+  profile: Profile | null;
+  mistakes: MistakeRecord[];
+  loading: boolean;
+  loadAll: (userId: string) => Promise<void>;
+  recordMistake: (m: {
+    question: Question;
+    userChoice: number;
+    timeSpent: number;
+    reason: ErrorReason;
+  }) => Promise<void>;
+  awardXP: (difficulty: Difficulty) => Promise<void>;
+  recordSession: (s: {
+    mode: string;
+    score: number;
+    total: number;
+    duration: number;
+    xpEarned: number;
+  }) => Promise<void>;
+  reset: () => void;
 }
 
 export const useNova = create<NovaState>((set, get) => ({
-  xp: 720,
-  streak: 6,
-  mistakes: INITIAL_MISTAKES,
-  recordMistake: (m) => set((s) => ({ mistakes: [m, ...s.mistakes] })),
-  awardXP: (amount) => set((s) => ({ xp: s.xp + amount })),
-  getQuestionById: (id) => QUESTIONS.find((q) => q.id === id),
-  rankInfo: () => rankFromXP(get().xp),
+  profile: null,
+  mistakes: [],
+  loading: false,
+
+  loadAll: async (userId) => {
+    set({ loading: true });
+    const [{ data: profile }, { data: mistakes }] = await Promise.all([
+      supabase.from("profiles").select("*").eq("id", userId).maybeSingle(),
+      supabase
+        .from("mistakes")
+        .select("*")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false })
+        .limit(200),
+    ]);
+    set({
+      profile: profile as Profile | null,
+      mistakes: (mistakes as any[] as MistakeRecord[]) ?? [],
+      loading: false,
+    });
+  },
+
+  recordMistake: async ({ question, userChoice, timeSpent, reason }) => {
+    const profile = get().profile;
+    if (!profile) return;
+    const { data, error } = await supabase
+      .from("mistakes")
+      .insert({
+        user_id: profile.id,
+        section: question.section,
+        topic: question.topic,
+        difficulty: question.difficulty,
+        reason,
+        time_spent: timeSpent,
+        prompt: question.prompt,
+        passage: question.passage ?? null,
+        choices: question.choices,
+        correct_index: question.correct,
+        user_choice: userChoice,
+        explanation: question.explanation,
+      })
+      .select()
+      .single();
+    if (!error && data) {
+      set((s) => ({ mistakes: [data as any as MistakeRecord, ...s.mistakes] }));
+    }
+  },
+
+  awardXP: async (difficulty) => {
+    const profile = get().profile;
+    if (!profile) return;
+    const newXP = profile.xp + xpForDifficulty(difficulty);
+    const { data } = await supabase
+      .from("profiles")
+      .update({ xp: newXP })
+      .eq("id", profile.id)
+      .select()
+      .single();
+    if (data) set({ profile: data as Profile });
+  },
+
+  recordSession: async ({ mode, score, total, duration, xpEarned }) => {
+    const profile = get().profile;
+    if (!profile) return;
+    await supabase.from("sessions").insert({
+      user_id: profile.id,
+      mode,
+      score,
+      total,
+      duration_seconds: duration,
+      xp_earned: xpEarned,
+    });
+  },
+
+  reset: () => set({ profile: null, mistakes: [], loading: false }),
 }));
