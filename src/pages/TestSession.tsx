@@ -49,7 +49,10 @@ const TestSession = () => {
     setLoading(true);
     try {
       if (m === "review" && mistakes.length > 0) {
-        setQuestions(mistakes.slice(0, MODULE_SIZE.review).map((mi, i): Question => ({
+        const reviewSource = requestedTopic
+          ? mistakes.filter((mi) => mi.topic.toLowerCase() === requestedTopic.toLowerCase())
+          : mistakes;
+        setQuestions((reviewSource.length ? reviewSource : mistakes).slice(0, MODULE_SIZE.review).map((mi, i): Question => ({
           id: `redo:${mi.id}:${i}`,
           section: mi.section as any,
           topic: mi.topic,
