@@ -72,7 +72,7 @@ const MistakeBank = () => {
                 {m.time_spent}s
               </span>
               <button
-                 onClick={() => nav("/test/review")}
+                  onClick={() => nav(`/test/review?topic=${encodeURIComponent(m.topic)}`)}
                 className="ml-auto inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-muted hover:bg-accent border border-border"
               >
                  <RotateCcw className="h-3 w-3" /> Review
