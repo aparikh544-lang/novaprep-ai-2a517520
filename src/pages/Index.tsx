@@ -13,6 +13,7 @@ import { GlassCard } from "@/components/GlassCard";
 import { useNova } from "@/lib/novaprep-store";
 import { rankFromXP } from "@/lib/novaprep-data";
 import { buildFlightPlan } from "@/lib/flight-plan";
+import { routeForTask } from "@/lib/practice-links";
 
 const Dashboard = () => {
   const profile = useNova((s) => s.profile);
@@ -23,8 +24,7 @@ const Dashboard = () => {
   const plan = useMemo(() => buildFlightPlan(mistakes), [mistakes]);
   const today = plan[0];
 
-  // Simple projected score: baseline 1200 + xp tilt, capped at 1600
-  const projected = Math.min(1600, 1200 + Math.round(xp / 12));
+  const projected = Math.min(1550, Math.max(900, 1050 + Math.round(xp / 20) - mistakes.length * 8));
   const targetSuffix = profile?.target_score ? ` / ${profile.target_score}` : "";
 
   return (
@@ -74,7 +74,7 @@ const Dashboard = () => {
         </GlassCard>
       </div>
 
-      <div className="grid lg:grid-cols-3 gap-6">
+      <div className="grid xl:grid-cols-[1.45fr_0.85fr] gap-6 items-start">
         <GlassCard variant="purple" className="lg:col-span-2">
           <div className="flex items-start justify-between gap-4 mb-4">
             <div>
@@ -106,7 +106,7 @@ const Dashboard = () => {
                   </div>
                 </div>
                   <Link
-                    to={`/test/${today.focus === "Time Management" ? "reading" : today.focus === "Redemption" ? "redemption" : "math"}?topic=${encodeURIComponent(b.task)}`}
+                    to={routeForTask(b.task, today.focus)}
                   className="text-xs px-3 py-1.5 rounded-md bg-primary/15 text-primary-glow border border-primary/30 hover:bg-primary/25 transition-colors"
                 >
                   Start
