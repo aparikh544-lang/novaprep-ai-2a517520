@@ -5,6 +5,7 @@ import { AppLayout } from "@/components/AppLayout";
 import { GlassCard } from "@/components/GlassCard";
 import { useNova } from "@/lib/novaprep-store";
 import { buildFlightPlan, DayFocus } from "@/lib/flight-plan";
+import { routeForTask } from "@/lib/practice-links";
 
 const focusMeta: Record<DayFocus, { color: string; icon: any; desc: string }> = {
   "Concept Fix": {
@@ -70,8 +71,8 @@ const DailyPlan = () => {
                   {day.blocks.map((b, j) => (
                     <Link
                       key={j}
-                      to={`/test/${day.focus === "Time Management" ? "reading" : day.focus === "Redemption" ? "redemption" : "math"}?topic=${encodeURIComponent(b.task)}`}
-                      className="p-3 rounded-lg bg-background/40 border border-border/60"
+                      to={routeForTask(b.task, day.focus)}
+                      className="p-3 rounded-lg bg-background/40 border border-border/60 hover:border-secondary/50 hover:bg-muted/40 transition-colors"
                     >
                       <div className="text-[11px] font-mono text-secondary">{b.duration} MIN</div>
                       <div className="text-sm mt-1 font-medium leading-snug">{b.task}</div>
