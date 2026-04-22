@@ -29,6 +29,8 @@ const TestSession = () => {
   const recordSession = useNova((s) => s.recordSession);
   const resolveMistake = useNova((s) => s.resolveMistake);
   const mistakes = useNova((s) => s.mistakes);
+  const requestedTopic = searchParams.get("topic") ?? undefined;
+  const weakTopic = requestedTopic ?? mistakes[0]?.topic;
 
   const [module, setModule] = useState<1 | 2>(1);
   const [questions, setQuestions] = useState<Question[]>([]);
@@ -47,8 +49,11 @@ const TestSession = () => {
     setLoading(true);
     try {
       if (m === "review" && mistakes.length > 0) {
-        setQuestions(mistakes.slice(0, MODULE_SIZE.review).map((mi, i): Question => ({
-          id: `redo-${mi.id}-${i}`,
+        const reviewSource = requestedTopic
+          ? mistakes.filter((mi) => mi.topic.toLowerCase() === requestedTopic.toLowerCase())
+          : mistakes;
+        setQuestions((reviewSource.length ? reviewSource : mistakes).slice(0, MODULE_SIZE.review).map((mi, i): Question => ({
+          id: `redo:${mi.id}:${i}`,
           section: mi.section as any,
           topic: mi.topic,
           difficulty: mi.difficulty,
@@ -64,7 +69,7 @@ const TestSession = () => {
           mode: m === "review" ? "redemption" : m,
           count: m === "full" ? (targetModule === 1 ? 54 : 44) : MODULE_SIZE[m],
           difficultyBias: bias,
-          topic: searchParams.get("topic") ?? undefined,
+          topic: m === "redemption" ? weakTopic : requestedTopic,
           section: m === "full" ? fullSection : undefined,
         });
         setQuestions(qs);
@@ -147,7 +152,7 @@ const TestSession = () => {
         elapsed > 90 ? "Time Pressure" : q.section === "Reading & Writing" ? "Misreading" : "Concept Gap";
       await recordMistake({ question: q, userChoice: choice, timeSpent: elapsed, reason });
     } else {
-      const sourceMistakeId = q.id.startsWith("redo-") ? q.id.split("-").slice(1, -1).join("-") : null;
+      const sourceMistakeId = q.id.startsWith("redo:") ? q.id.split(":")[1] : null;
       if (sourceMistakeId) await resolveMistake(sourceMistakeId);
       await awardXP(q.difficulty);
       setXpEarned((x) => x + (q.difficulty === "hard" ? 25 : q.difficulty === "medium" ? 15 : 8));

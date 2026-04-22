@@ -48,8 +48,8 @@ const Analytics = () => {
     }
     return sessions.map((s, i) => {
       const acc = s.total > 0 ? s.score / s.total : 0;
-      // Simple projection: 800 baseline + accuracy lift
-      const projected = Math.min(1600, Math.round(800 + acc * 800));
+      const volume = Math.min(120, sessions.slice(0, i + 1).reduce((a, row) => a + row.total, 0));
+      const projected = Math.min(1550, Math.round(950 + acc * 420 + volume * 1.5 + (profile?.xp ?? 0) / 30));
       return { week: `S${i + 1}`, score: projected };
     });
   }, [sessions, profile?.xp]);
