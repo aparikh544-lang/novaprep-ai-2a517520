@@ -5,6 +5,7 @@ import { Question, ErrorReason } from "@/lib/novaprep-data";
 import { useNova } from "@/lib/novaprep-store";
 import { generateQuestions } from "@/lib/generate-questions";
 import { toast } from "@/hooks/use-toast";
+import { taskCompletionKey } from "@/lib/practice-links";
 
 type Mode = "full" | "reading" | "math" | "redemption" | "review";
 
@@ -28,8 +29,11 @@ const TestSession = () => {
   const awardXP = useNova((s) => s.awardXP);
   const recordSession = useNova((s) => s.recordSession);
   const resolveMistake = useNova((s) => s.resolveMistake);
+  const markTaskComplete = useNova((s) => s.markTaskComplete);
   const mistakes = useNova((s) => s.mistakes);
   const requestedTopic = searchParams.get("topic") ?? undefined;
+  const taskLabel = searchParams.get("task") ?? undefined;
+  const dayLabel = searchParams.get("day") ?? undefined;
   const weakTopic = requestedTopic ?? mistakes[0]?.topic;
 
   const [module, setModule] = useState<1 | 2>(1);
@@ -44,6 +48,12 @@ const TestSession = () => {
   const [completed, setCompleted] = useState({ correct: 0, total: 0, seconds: 0 });
   const wrapRef = useRef<HTMLDivElement>(null);
   const currentLimit = m === "full" ? (module === 1 ? 64 * 60 : 70 * 60) : MODULE_LIMIT[m];
+
+  const cleanExplanation = (text: string) =>
+    text
+      .replace(/<think>[\s\S]*?<\/think>/gi, "")
+      .replace(/(^|\n)\s*(reasoning|chain of thought|internal thinking)\s*:[\s\S]*/gi, "")
+      .trim();
 
   const loadQuestions = async (bias: "balanced" | "easier" | "harder", targetModule = module) => {
     setLoading(true);
@@ -61,7 +71,7 @@ const TestSession = () => {
           passage: mi.passage ?? undefined,
           choices: mi.choices,
           correct: mi.correct_index,
-          explanation: mi.explanation ?? "",
+          explanation: cleanExplanation(mi.explanation ?? ""),
         })));
       } else {
         const fullSection = targetModule === 1 ? "Reading & Writing" : "Math";
@@ -72,7 +82,7 @@ const TestSession = () => {
           topic: m === "redemption" ? weakTopic : requestedTopic,
           section: m === "full" ? fullSection : undefined,
         });
-        setQuestions(qs);
+        setQuestions(qs.map((question) => ({ ...question, explanation: cleanExplanation(question.explanation) })));
       }
     } catch (e: any) {
       toast({
@@ -168,6 +178,13 @@ const TestSession = () => {
       duration: sessionTime + completed.seconds,
       xpEarned,
     });
+    if (taskLabel && dayLabel) {
+      await markTaskComplete({
+        taskKey: taskCompletionKey(dayLabel, taskLabel),
+        taskLabel,
+        dayLabel,
+      });
+    }
   };
 
   const goNext = async () => {
