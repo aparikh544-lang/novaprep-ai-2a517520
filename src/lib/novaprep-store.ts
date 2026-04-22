@@ -76,6 +76,18 @@ interface NovaState {
   reset: () => void;
 }
 
+const todayDate = () => new Date().toISOString().slice(0, 10);
+
+const dedupeMistakes = (mistakes: MistakeRecord[]) =>
+  Array.from(
+    new Map(
+      mistakes.map((mistake) => [
+        `${mistake.section}::${mistake.topic}::${mistake.prompt}`,
+        mistake,
+      ]),
+    ).values(),
+  );
+
 export const useNova = create<NovaState>((set, get) => ({
   profile: null,
   mistakes: [],
@@ -86,59 +98,51 @@ export const useNova = create<NovaState>((set, get) => ({
 
   loadAll: async (userId) => {
     set({ loading: true });
-    const today = new Date().toISOString().slice(0, 10);
-    const [{ data: profile }, { data: mistakes }, { data: sessions }, { data: taskCompletions }, { data: mysteryBoxes }] = await Promise.all([
+    const today = todayDate();
+    const [profileRes, mistakesRes, sessionsRes, taskCompletionsRes, mysteryBoxesRes] = await Promise.all([
       supabase.from("profiles").select("*").eq("id", userId).maybeSingle(),
-      supabase
-        .from("mistakes")
-        .select("*")
-        .eq("user_id", userId)
-        .order("created_at", { ascending: false })
-        .limit(200),
-      supabase
-        .from("sessions")
-        .select("id,created_at,score,total,duration_seconds,mode,xp_earned")
-        .eq("user_id", userId)
-        .order("created_at", { ascending: false })
-        .limit(100),
-      supabase
-        .from("task_completions")
-        .select("id,task_key,task_label,day_label,completed_on")
-        .eq("user_id", userId)
-        .eq("completed_on", today),
-      supabase
-        .from("mystery_boxes")
-        .select("id,level_number,tier,upgrade_clicks_used,reward_label,opened_at,claimed_at,created_at,updated_at")
-        .eq("user_id", userId)
-        .order("level_number", { ascending: false }),
+      supabase.from("mistakes").select("*").eq("user_id", userId).order("created_at", { ascending: false }).limit(200),
+      supabase.from("sessions").select("id,created_at,score,total,duration_seconds,mode,xp_earned").eq("user_id", userId).order("created_at", { ascending: false }).limit(100),
+      supabase.from("task_completions").select("id,task_key,task_label,day_label,completed_on").eq("user_id", userId).eq("completed_on", today),
+      supabase.from("mystery_boxes").select("id,level_number,tier,upgrade_clicks_used,reward_label,opened_at,claimed_at,created_at,updated_at").eq("user_id", userId).order("level_number", { ascending: false }),
     ]);
+
     set({
-      profile: profile as Profile | null,
-      mistakes: Array.from(new Map((((mistakes as any[]) ?? []) as MistakeRecord[]).map((m) => [m.id, m])).values()),
-      sessions: ((sessions as any[]) ?? []) as SessionSummary[],
-      taskCompletions: ((taskCompletions as any[]) ?? []) as TaskCompletion[],
-      mysteryBoxes: ((mysteryBoxes as any[]) ?? []) as MysteryBox[],
+      profile: (profileRes.data as Profile | null) ?? null,
+      mistakes: dedupeMistakes(((mistakesRes.data as MistakeRecord[]) ?? [])),
+      sessions: (sessionsRes.data as SessionSummary[]) ?? [],
+      taskCompletions: (taskCompletionsRes.data as TaskCompletion[]) ?? [],
+      mysteryBoxes: (mysteryBoxesRes.data as MysteryBox[]) ?? [],
       loading: false,
     });
+
+    if (profileRes.data) await get().syncBoxes();
   },
 
   markTaskComplete: async ({ taskKey, taskLabel, dayLabel }) => {
     const profile = get().profile;
     if (!profile) return;
+
     const { data, error } = await supabase
       .from("task_completions")
-      .upsert({
-        user_id: profile.id,
-        task_key: taskKey,
-        task_label: taskLabel,
-        day_label: dayLabel,
-        completed_on: new Date().toISOString().slice(0, 10),
-      }, { onConflict: "user_id,task_key,completed_on" })
+      .upsert(
+        {
+          user_id: profile.id,
+          task_key: taskKey,
+          task_label: taskLabel,
+          day_label: dayLabel,
+          completed_on: todayDate(),
+        },
+        { onConflict: "user_id,task_key,completed_on" },
+      )
       .select("id,task_key,task_label,day_label,completed_on")
       .single();
+
     if (!error && data) {
-      set((s) => ({
-        taskCompletions: Array.from(new Map([data as TaskCompletion, ...s.taskCompletions].map((item) => [item.task_key, item])).values()),
+      set((state) => ({
+        taskCompletions: Array.from(
+          new Map([data as TaskCompletion, ...state.taskCompletions].map((item) => [item.task_key, item])).values(),
+        ),
       }));
     }
   },
@@ -146,30 +150,37 @@ export const useNova = create<NovaState>((set, get) => ({
   syncBoxes: async () => {
     const profile = get().profile;
     if (!profile) return;
-    const levelCount = Math.max(1, Math.floor(profile.xp / 500) + 1);
-    const existing = new Set(get().mysteryBoxes.map((box) => box.level_number));
-    const missingLevels = Array.from({ length: levelCount }, (_, i) => i + 1).filter((level) => !existing.has(level));
+
+    const unlockedLevels = Math.max(1, Math.floor(profile.xp / 500) + 1);
+    const existingLevels = new Set(get().mysteryBoxes.map((box) => box.level_number));
+    const missingLevels = Array.from({ length: unlockedLevels }, (_, index) => index + 1).filter(
+      (level) => !existingLevels.has(level),
+    );
+
     if (missingLevels.length > 0) {
       await supabase.from("mystery_boxes").insert(
         missingLevels.map((level) => ({
           user_id: profile.id,
           level_number: level,
-          tier: "common",
+          tier: "common" as const,
           reward_label: `Level ${level} Mystery Box`,
         })),
       );
     }
+
     const { data } = await supabase
       .from("mystery_boxes")
       .select("id,level_number,tier,upgrade_clicks_used,reward_label,opened_at,claimed_at,created_at,updated_at")
       .eq("user_id", profile.id)
       .order("level_number", { ascending: false });
-    set({ mysteryBoxes: ((data as any[]) ?? []) as MysteryBox[] });
+
+    set({ mysteryBoxes: (data as MysteryBox[]) ?? [] });
   },
 
   upgradeMysteryBox: async (boxId) => {
     const box = get().mysteryBoxes.find((entry) => entry.id === boxId);
     if (!box || box.upgrade_clicks_used >= 3) return null;
+
     const roll = Math.random();
     let nextTier = box.tier;
     if (box.tier === "common" && roll < 0.3) nextTier = "rare";
@@ -188,21 +199,28 @@ export const useNova = create<NovaState>((set, get) => ({
       .single();
 
     if (!error && data) {
-      set((s) => ({
-        mysteryBoxes: s.mysteryBoxes.map((entry) => (entry.id === boxId ? (data as MysteryBox) : entry)),
+      set((state) => ({
+        mysteryBoxes: state.mysteryBoxes.map((entry) => (entry.id === boxId ? (data as MysteryBox) : entry)),
       }));
       return data as MysteryBox;
     }
+
     return null;
   },
 
   recordMistake: async ({ question, userChoice, timeSpent, reason }) => {
     const profile = get().profile;
     if (!profile) return;
+
     const existing = get().mistakes.find(
-      (m) => m.prompt === question.prompt && m.topic === question.topic && m.user_id === profile.id,
+      (mistake) =>
+        mistake.user_id === profile.id &&
+        mistake.section === question.section &&
+        mistake.topic === question.topic &&
+        mistake.prompt === question.prompt,
     );
     if (existing) return;
+
     const { data, error } = await supabase
       .from("mistakes")
       .insert({
@@ -221,14 +239,16 @@ export const useNova = create<NovaState>((set, get) => ({
       })
       .select()
       .single();
+
     if (!error && data) {
-      set((s) => ({ mistakes: Array.from(new Map([data as any as MistakeRecord, ...s.mistakes].map((m) => [m.id, m])).values()) }));
+      set((state) => ({ mistakes: dedupeMistakes([data as MistakeRecord, ...state.mistakes]) }));
     }
   },
 
   awardXP: async (difficulty) => {
     const profile = get().profile;
     if (!profile) return;
+
     const newXP = profile.xp + xpForDifficulty(difficulty);
     const { data } = await supabase
       .from("profiles")
@@ -236,6 +256,7 @@ export const useNova = create<NovaState>((set, get) => ({
       .eq("id", profile.id)
       .select()
       .single();
+
     if (data) {
       set({ profile: data as Profile });
       await get().syncBoxes();
@@ -245,22 +266,32 @@ export const useNova = create<NovaState>((set, get) => ({
   recordSession: async ({ mode, score, total, duration, xpEarned }) => {
     const profile = get().profile;
     if (!profile) return;
-    const { data } = await supabase.from("sessions").insert({
-      user_id: profile.id,
-      mode,
-      score,
-      total,
-      duration_seconds: duration,
-      xp_earned: xpEarned,
-    }).select("id,created_at,score,total,duration_seconds,mode,xp_earned").single();
-    const today = new Date().toISOString().slice(0, 10);
+
+    const { data } = await supabase
+      .from("sessions")
+      .insert({
+        user_id: profile.id,
+        mode,
+        score,
+        total,
+        duration_seconds: duration,
+        xp_earned: xpEarned,
+      })
+      .select("id,created_at,score,total,duration_seconds,mode,xp_earned")
+      .single();
+
+    const today = todayDate();
     const lastSessionDate = get().sessions[0]?.created_at?.slice(0, 10);
     let nextStreak = profile.streak || 0;
+
     if (lastSessionDate === today) nextStreak = Math.max(1, nextStreak);
-    else if (lastSessionDate) {
-      const diff = Math.round((new Date(today).getTime() - new Date(lastSessionDate).getTime()) / 86400000);
-      nextStreak = diff === 1 ? nextStreak + 1 : 1;
-    } else nextStreak = 1;
+    else if (!lastSessionDate) nextStreak = 1;
+    else {
+      const diffDays = Math.round(
+        (new Date(`${today}T00:00:00`).getTime() - new Date(`${lastSessionDate}T00:00:00`).getTime()) / 86400000,
+      );
+      nextStreak = diffDays === 1 ? nextStreak + 1 : 1;
+    }
 
     const { data: updatedProfile } = await supabase
       .from("profiles")
@@ -269,18 +300,49 @@ export const useNova = create<NovaState>((set, get) => ({
       .select()
       .single();
 
-    set((s) => ({
-      sessions: data ? [data as SessionSummary, ...s.sessions] : s.sessions,
-      profile: (updatedProfile as Profile) ?? s.profile,
+    set((state) => ({
+      sessions: data ? [data as SessionSummary, ...state.sessions] : state.sessions,
+      profile: (updatedProfile as Profile) ?? state.profile,
     }));
   },
 
   resolveMistake: async (id) => {
     const profile = get().profile;
     if (!profile) return;
-    const { error } = await supabase.from("mistakes").delete().eq("id", id).eq("user_id", profile.id);
-    if (!error) set((s) => ({ mistakes: s.mistakes.filter((m) => m.id !== id) }));
+
+    const source = get().mistakes.find((mistake) => mistake.id === id);
+    if (!source) return;
+
+    const { error } = await supabase
+      .from("mistakes")
+      .delete()
+      .eq("user_id", profile.id)
+      .eq("section", source.section)
+      .eq("topic", source.topic)
+      .eq("prompt", source.prompt);
+
+    if (!error) {
+      set((state) => ({
+        mistakes: state.mistakes.filter(
+          (mistake) =>
+            !(
+              mistake.user_id === profile.id &&
+              mistake.section === source.section &&
+              mistake.topic === source.topic &&
+              mistake.prompt === source.prompt
+            ),
+        ),
+      }));
+    }
   },
 
-  reset: () => set({ profile: null, mistakes: [], sessions: [], taskCompletions: [], mysteryBoxes: [], loading: false }),
+  reset: () =>
+    set({
+      profile: null,
+      mistakes: [],
+      sessions: [],
+      taskCompletions: [],
+      mysteryBoxes: [],
+      loading: false,
+    }),
 }));
