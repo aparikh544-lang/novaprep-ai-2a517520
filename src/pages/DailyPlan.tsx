@@ -5,7 +5,7 @@ import { AppLayout } from "@/components/AppLayout";
 import { GlassCard } from "@/components/GlassCard";
 import { useNova } from "@/lib/novaprep-store";
 import { buildFlightPlan, DayFocus } from "@/lib/flight-plan";
-import { routeForTask } from "@/lib/practice-links";
+import { routeForTask, taskCompletionKey } from "@/lib/practice-links";
 
 const focusMeta: Record<DayFocus, { color: string; icon: any; desc: string }> = {
   "Concept Fix": {
@@ -27,6 +27,7 @@ const focusMeta: Record<DayFocus, { color: string; icon: any; desc: string }> = 
 
 const DailyPlan = () => {
   const mistakes = useNova((s) => s.mistakes);
+  const taskCompletions = useNova((s) => s.taskCompletions);
   const plan = useMemo(() => buildFlightPlan(mistakes), [mistakes]);
 
   return (
@@ -68,16 +69,19 @@ const DailyPlan = () => {
                   </p>
                 </div>
                 <div className="flex-1 grid sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
-                  {day.blocks.map((b, j) => (
-                    <Link
-                      key={j}
-                      to={routeForTask(b.task, day.focus)}
-                      className="p-3 rounded-lg bg-background/40 border border-border/60 hover:border-secondary/50 hover:bg-muted/40 transition-colors"
-                    >
-                      <div className="text-[11px] font-mono text-secondary">{b.duration} MIN</div>
-                      <div className="text-sm mt-1 font-medium leading-snug">{b.task}</div>
-                    </Link>
-                  ))}
+                  {day.blocks.map((b, j) => {
+                    const completed = taskCompletions.some((item) => item.task_key === taskCompletionKey(day.day, b.task));
+                    return (
+                      <Link
+                        key={j}
+                        to={routeForTask(b.task, day.focus, day.day)}
+                        className={`p-3 rounded-lg border transition-colors ${completed ? "bg-muted/25 border-success/30" : "bg-background/40 border-border/60 hover:border-secondary/50 hover:bg-muted/40"}`}
+                      >
+                        <div className="text-[11px] font-mono text-secondary">{b.duration} MIN</div>
+                        <div className={`text-sm mt-1 font-medium leading-snug ${completed ? "line-through text-muted-foreground" : ""}`}>{b.task}</div>
+                      </Link>
+                    );
+                  })}
                 </div>
               </div>
             </GlassCard>

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { AppLayout } from "@/components/AppLayout";
 import { GlassCard } from "@/components/GlassCard";
 import {
@@ -13,46 +13,25 @@ import {
   Bar,
 } from "recharts";
 import { useNova } from "@/lib/novaprep-store";
-import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/contexts/AuthContext";
-
-interface SessionRow {
-  created_at: string;
-  score: number;
-  total: number;
-  duration_seconds: number;
-  mode: string;
-  xp_earned: number;
-}
+import { deriveNovaStats } from "@/lib/novaprep-stats";
 
 const Analytics = () => {
-  const { user } = useAuth();
   const mistakes = useNova((s) => s.mistakes);
   const profile = useNova((s) => s.profile);
-  const [sessions, setSessions] = useState<SessionRow[]>([]);
-
-  useEffect(() => {
-    if (!user) return;
-    supabase
-      .from("sessions")
-      .select("created_at,score,total,duration_seconds,mode,xp_earned")
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: true })
-      .limit(50)
-      .then(({ data }) => setSessions((data as SessionRow[]) ?? []));
-  }, [user, profile?.xp]);
+  const sessions = useNova((s) => s.sessions).slice().reverse();
+  const stats = deriveNovaStats(sessions, mistakes, profile?.xp ?? 0, profile?.target_score);
 
   const scoreData = useMemo(() => {
     if (!sessions.length) {
-      return [{ week: "Start", score: 1200 + Math.round((profile?.xp ?? 0) / 12) }];
+      return [{ week: "Start", score: stats.projectedScore }];
     }
     return sessions.map((s, i) => {
       const acc = s.total > 0 ? s.score / s.total : 0;
-      const volume = Math.min(120, sessions.slice(0, i + 1).reduce((a, row) => a + row.total, 0));
-      const projected = Math.min(1550, Math.round(950 + acc * 420 + volume * 1.5 + (profile?.xp ?? 0) / 30));
+      const volume = Math.min(180, sessions.slice(0, i + 1).reduce((a, row) => a + row.total, 0));
+      const projected = Math.min(profile?.target_score ?? 1600, Math.round(980 + acc * 420 + volume * 1.1 + (profile?.xp ?? 0) / 22));
       return { week: `S${i + 1}`, score: projected };
     });
-  }, [sessions, profile?.xp]);
+  }, [sessions, profile?.xp, profile?.target_score, stats.projectedScore]);
 
   const paceData = useMemo(() => {
     const byTopic = new Map<string, { sum: number; n: number }>();
@@ -67,16 +46,6 @@ const Analytics = () => {
       .sort((a, b) => b.sec - a.sec)
       .slice(0, 8);
   }, [mistakes]);
-
-  const totalAnswered = sessions.reduce((a, s) => a + s.total, 0);
-  const totalCorrect = sessions.reduce((a, s) => a + s.score, 0);
-  const accuracy = totalAnswered > 0 ? Math.round((totalCorrect / totalAnswered) * 100) : 0;
-  const totalSeconds = sessions.reduce((a, s) => a + s.duration_seconds, 0);
-  const hoursLogged = (totalSeconds / 3600).toFixed(1);
-  const avgPace =
-    totalAnswered > 0 ? Math.round(totalSeconds / totalAnswered) : 0;
-  const bestAccuracy = sessions.length ? Math.max(...sessions.map((s) => Math.round((s.score / Math.max(1, s.total)) * 100))) : 0;
-  const weeklyXP = sessions.slice(-7).reduce((a, s) => a + s.xp_earned, 0);
 
   const modeData = useMemo(() => {
     const counts = new Map<string, number>();
@@ -140,11 +109,11 @@ const Analytics = () => {
           <ul className="mt-4 space-y-3 text-sm">
             <li className="flex justify-between">
               <span className="text-muted-foreground">Accuracy</span>
-              <span className="font-mono">{accuracy}%</span>
+              <span className="font-mono">{stats.accuracy}%</span>
             </li>
             <li className="flex justify-between">
               <span className="text-muted-foreground">Avg pace</span>
-              <span className="font-mono">{avgPace}s / Q</span>
+              <span className="font-mono">{stats.avgPace}s / Q</span>
             </li>
             <li className="flex justify-between">
               <span className="text-muted-foreground">Tests taken</span>
@@ -152,15 +121,15 @@ const Analytics = () => {
             </li>
             <li className="flex justify-between">
               <span className="text-muted-foreground">Hours logged</span>
-              <span className="font-mono">{hoursLogged}</span>
+              <span className="font-mono">{stats.hoursLogged}</span>
             </li>
             <li className="flex justify-between">
               <span className="text-muted-foreground">Best accuracy</span>
-              <span className="font-mono text-success">{bestAccuracy}%</span>
+              <span className="font-mono text-success">{stats.bestAccuracy}%</span>
             </li>
             <li className="flex justify-between">
               <span className="text-muted-foreground">7-session XP</span>
-              <span className="font-mono text-secondary">+{weeklyXP}</span>
+              <span className="font-mono text-secondary">+{stats.weeklyXP}</span>
             </li>
             <li className="flex justify-between">
               <span className="text-muted-foreground">Strongest</span>

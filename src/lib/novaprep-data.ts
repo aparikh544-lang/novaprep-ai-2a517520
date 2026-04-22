@@ -36,12 +36,42 @@ export interface MistakeRecord {
 
 export const RANKS = ["Cadet", "Pilot", "Lieutenant", "Captain", "Commander"] as const;
 
+const RANK_SPANS = [5, 10, 15, 20, 25] as const;
+
 export function rankFromXP(xp: number) {
-  if (xp < 500) return { rank: "Cadet", next: "Pilot", floor: 0, ceiling: 500 };
-  if (xp < 1500) return { rank: "Pilot", next: "Lieutenant", floor: 500, ceiling: 1500 };
-  if (xp < 3000) return { rank: "Lieutenant", next: "Captain", floor: 1500, ceiling: 3000 };
-  if (xp < 5000) return { rank: "Captain", next: "Commander", floor: 3000, ceiling: 5000 };
-  return { rank: "Commander", next: "Commander", floor: 5000, ceiling: 5000 };
+  const level = Math.max(1, Math.floor(xp / 500) + 1);
+  let cumulative = 0;
+
+  for (let i = 0; i < RANKS.length; i += 1) {
+    const span = RANK_SPANS[i];
+    const startLevel = cumulative + 1;
+    const endLevel = cumulative + span;
+    if (level <= endLevel || i === RANKS.length - 1) {
+      const levelInRank = Math.min(span, Math.max(1, level - cumulative));
+      const floor = cumulative * 500;
+      const ceiling = endLevel * 500;
+      return {
+        rank: RANKS[i],
+        next: RANKS[Math.min(i + 1, RANKS.length - 1)],
+        floor,
+        ceiling,
+        level,
+        levelInRank,
+        levelsInRank: span,
+      };
+    }
+    cumulative += span;
+  }
+
+  return {
+    rank: RANKS[RANKS.length - 1],
+    next: RANKS[RANKS.length - 1],
+    floor: 0,
+    ceiling: 500,
+    level,
+    levelInRank: 1,
+    levelsInRank: 1,
+  };
 }
 
 export function xpForDifficulty(d: Difficulty) {

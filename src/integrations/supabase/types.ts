@@ -65,6 +65,53 @@ export type Database = {
         }
         Relationships: []
       }
+      mystery_boxes: {
+        Row: {
+          claimed_at: string | null
+          created_at: string
+          id: string
+          level_number: number
+          opened_at: string | null
+          reward_label: string | null
+          tier: Database["public"]["Enums"]["box_tier"]
+          updated_at: string
+          upgrade_clicks_used: number
+          user_id: string
+        }
+        Insert: {
+          claimed_at?: string | null
+          created_at?: string
+          id?: string
+          level_number: number
+          opened_at?: string | null
+          reward_label?: string | null
+          tier?: Database["public"]["Enums"]["box_tier"]
+          updated_at?: string
+          upgrade_clicks_used?: number
+          user_id: string
+        }
+        Update: {
+          claimed_at?: string | null
+          created_at?: string
+          id?: string
+          level_number?: number
+          opened_at?: string | null
+          reward_label?: string | null
+          tier?: Database["public"]["Enums"]["box_tier"]
+          updated_at?: string
+          upgrade_clicks_used?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mystery_boxes_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           created_at: string
@@ -131,6 +178,44 @@ export type Database = {
         }
         Relationships: []
       }
+      task_completions: {
+        Row: {
+          completed_on: string
+          created_at: string
+          day_label: string
+          id: string
+          task_key: string
+          task_label: string
+          user_id: string
+        }
+        Insert: {
+          completed_on?: string
+          created_at?: string
+          day_label: string
+          id?: string
+          task_key: string
+          task_label: string
+          user_id: string
+        }
+        Update: {
+          completed_on?: string
+          created_at?: string
+          day_label?: string
+          id?: string
+          task_key?: string
+          task_label?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "task_completions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -139,7 +224,7 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      [_ in never]: never
+      box_tier: "common" | "rare" | "epic" | "legendary"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -266,6 +351,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      box_tier: ["common", "rare", "epic", "legendary"],
+    },
   },
 } as const

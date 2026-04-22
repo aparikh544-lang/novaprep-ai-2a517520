@@ -1,12 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { Link } from "react-router-dom";
 import { Award, CalendarDays, Flame, Medal, ShieldCheck, Star, Target, Trophy, UserCircle, Zap } from "lucide-react";
 import { AppLayout } from "@/components/AppLayout";
 import { GlassCard } from "@/components/GlassCard";
 import { useNova } from "@/lib/novaprep-store";
 import { rankFromXP } from "@/lib/novaprep-data";
-import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/contexts/AuthContext";
+import { deriveNovaStats } from "@/lib/novaprep-stats";
 
 const rewards = [
   { name: "Cadet Kit", at: 0, icon: ShieldCheck, reward: "Starter badge" },
@@ -17,26 +16,15 @@ const rewards = [
 ];
 
 const Profile = () => {
-  const { user } = useAuth();
   const profile = useNova((s) => s.profile);
   const mistakes = useNova((s) => s.mistakes);
-  const [sessions, setSessions] = useState<{ score: number; total: number; xp_earned: number }[]>([]);
+  const sessions = useNova((s) => s.sessions);
   const xp = profile?.xp ?? 0;
   const rank = rankFromXP(xp);
   const pct = rank.ceiling === rank.floor ? 100 : Math.min(100, ((xp - rank.floor) / (rank.ceiling - rank.floor)) * 100);
   const initials = (profile?.display_name ?? "Nova Pilot").split(" ").map((p) => p[0]).join("").slice(0, 2).toUpperCase();
-  const level = Math.floor(xp / 250) + 1;
-  const accuracy = useMemo(() => {
-    const total = sessions.reduce((a, s) => a + s.total, 0);
-    const correct = sessions.reduce((a, s) => a + s.score, 0);
-    return total ? Math.round((correct / total) * 100) : 0;
-  }, [sessions]);
-
-  useEffect(() => {
-    if (!user) return;
-    supabase.from("sessions").select("score,total,xp_earned").eq("user_id", user.id).order("created_at", { ascending: false }).limit(100)
-      .then(({ data }) => setSessions((data as typeof sessions) ?? []));
-  }, [user, xp]);
+  const level = rank.level;
+  const stats = useMemo(() => deriveNovaStats(sessions, mistakes, xp, profile?.target_score), [sessions, mistakes, xp, profile?.target_score]);
 
   return (
     <AppLayout>
@@ -49,7 +37,7 @@ const Profile = () => {
             <div>
               <span className="text-xs uppercase tracking-[0.25em] text-secondary">Profile</span>
               <h1 className="font-display text-4xl font-bold mt-1">{profile?.display_name ?? "Nova Pilot"}</h1>
-              <p className="text-muted-foreground text-sm mt-1">Level {level} · {rank.rank} · {xp.toLocaleString()} XP</p>
+              <p className="text-muted-foreground text-sm mt-1">Level {level} · {rank.rank} {rank.levelInRank}/{rank.levelsInRank} · {xp.toLocaleString()} XP</p>
             </div>
           </div>
           <div className="mt-8 h-3 rounded-full bg-muted overflow-hidden">
@@ -65,7 +53,7 @@ const Profile = () => {
           <GlassCard><Target className="h-5 w-5 text-secondary" /><div className="mt-3 text-2xl font-display font-bold">{profile?.target_score ?? "—"}</div><p className="text-xs text-muted-foreground">Target score</p></GlassCard>
           <GlassCard><CalendarDays className="h-5 w-5 text-primary" /><div className="mt-3 text-2xl font-display font-bold">{profile?.test_date ?? "—"}</div><p className="text-xs text-muted-foreground">Test date</p></GlassCard>
           <GlassCard><Flame className="h-5 w-5 text-warning" /><div className="mt-3 text-2xl font-display font-bold">{mistakes.length}</div><p className="text-xs text-muted-foreground">Skills to clear</p></GlassCard>
-          <GlassCard><Star className="h-5 w-5 text-success" /><div className="mt-3 text-2xl font-display font-bold">{accuracy}%</div><p className="text-xs text-muted-foreground">Lifetime accuracy</p></GlassCard>
+          <GlassCard><Star className="h-5 w-5 text-success" /><div className="mt-3 text-2xl font-display font-bold">{stats.accuracy}%</div><p className="text-xs text-muted-foreground">Lifetime accuracy</p></GlassCard>
           <GlassCard><Zap className="h-5 w-5 text-secondary" /><div className="mt-3 text-2xl font-display font-bold">{sessions.length}</div><p className="text-xs text-muted-foreground">Sessions completed</p></GlassCard>
           <GlassCard><Trophy className="h-5 w-5 text-primary" /><div className="mt-3 text-2xl font-display font-bold">{rewards.filter((r) => xp >= r.at).length}/{rewards.length}</div><p className="text-xs text-muted-foreground">Rewards unlocked</p></GlassCard>
         </div>
@@ -74,8 +62,8 @@ const Profile = () => {
       <div className="mt-6 grid lg:grid-cols-[0.8fr_1.2fr] gap-6 items-start">
         <GlassCard variant="cyan">
           <h2 className="font-display text-2xl font-semibold">Next Reward</h2>
-          <p className="text-sm text-muted-foreground mt-2">Earn XP from correct answers to unlock profile cosmetics and status badges.</p>
-          <Link to="/practice" className="mt-5 inline-flex px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium">Earn XP</Link>
+          <p className="text-sm text-muted-foreground mt-2">Projected {stats.projectedScore} · best accuracy {stats.bestAccuracy}% · {stats.hoursLogged} hours logged.</p>
+          <Link to="/boxes" className="mt-5 inline-flex px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium">Open boxes</Link>
         </GlassCard>
         <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4">
         {rewards.map((r) => {

@@ -14,17 +14,20 @@ import { useNova } from "@/lib/novaprep-store";
 import { rankFromXP } from "@/lib/novaprep-data";
 import { buildFlightPlan } from "@/lib/flight-plan";
 import { routeForTask } from "@/lib/practice-links";
+import { deriveNovaStats } from "@/lib/novaprep-stats";
 
 const Dashboard = () => {
   const profile = useNova((s) => s.profile);
   const mistakes = useNova((s) => s.mistakes);
+  const sessions = useNova((s) => s.sessions);
   const xp = profile?.xp ?? 0;
   const streak = profile?.streak ?? 0;
   const info = rankFromXP(xp);
   const plan = useMemo(() => buildFlightPlan(mistakes), [mistakes]);
   const today = plan[0];
+  const stats = useMemo(() => deriveNovaStats(sessions, mistakes, xp, profile?.target_score), [sessions, mistakes, xp, profile?.target_score]);
 
-  const projected = Math.min(1550, Math.max(900, 1050 + Math.round(xp / 20) - mistakes.length * 8));
+  const projected = stats.projectedScore;
   const targetSuffix = profile?.target_score ? ` / ${profile.target_score}` : "";
 
   return (
@@ -106,7 +109,7 @@ const Dashboard = () => {
                   </div>
                 </div>
                   <Link
-                    to={routeForTask(b.task, today.focus)}
+                    to={routeForTask(b.task, today.focus, today.day)}
                   className="text-xs px-3 py-1.5 rounded-md bg-primary/15 text-primary-glow border border-primary/30 hover:bg-primary/25 transition-colors"
                 >
                   Start

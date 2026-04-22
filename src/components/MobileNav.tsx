@@ -8,6 +8,7 @@ import {
   Bookmark,
   BarChart3,
   UserCircle,
+  Gift,
   Rocket,
   Menu,
   X,
@@ -21,6 +22,7 @@ const items = [
   { to: "/mistakes", label: "Mistake Bank", icon: Bookmark },
   { to: "/analytics", label: "Analytics", icon: BarChart3 },
   { to: "/profile", label: "Profile", icon: UserCircle },
+  { to: "/boxes", label: "Boxes", icon: Gift },
 ];
 
 export function MobileNav() {

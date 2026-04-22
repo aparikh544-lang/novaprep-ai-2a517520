@@ -17,11 +17,47 @@ interface Profile {
   streak: number;
 }
 
+export interface SessionSummary {
+  id: string;
+  created_at: string;
+  score: number;
+  total: number;
+  duration_seconds: number;
+  mode: string;
+  xp_earned: number;
+}
+
+export interface TaskCompletion {
+  id: string;
+  task_key: string;
+  task_label: string;
+  day_label: string;
+  completed_on: string;
+}
+
+export interface MysteryBox {
+  id: string;
+  level_number: number;
+  tier: "common" | "rare" | "epic" | "legendary";
+  upgrade_clicks_used: number;
+  reward_label: string | null;
+  opened_at: string | null;
+  claimed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 interface NovaState {
   profile: Profile | null;
   mistakes: MistakeRecord[];
+  sessions: SessionSummary[];
+  taskCompletions: TaskCompletion[];
+  mysteryBoxes: MysteryBox[];
   loading: boolean;
   loadAll: (userId: string) => Promise<void>;
+  markTaskComplete: (task: { taskKey: string; taskLabel: string; dayLabel: string }) => Promise<void>;
+  syncBoxes: () => Promise<void>;
+  upgradeMysteryBox: (boxId: string) => Promise<MysteryBox | null>;
   recordMistake: (m: {
     question: Question;
     userChoice: number;
@@ -40,32 +76,151 @@ interface NovaState {
   reset: () => void;
 }
 
+const todayDate = () => new Date().toISOString().slice(0, 10);
+
+const dedupeMistakes = (mistakes: MistakeRecord[]) =>
+  Array.from(
+    new Map(
+      mistakes.map((mistake) => [
+        `${mistake.section}::${mistake.topic}::${mistake.prompt}`,
+        mistake,
+      ]),
+    ).values(),
+  );
+
 export const useNova = create<NovaState>((set, get) => ({
   profile: null,
   mistakes: [],
+  sessions: [],
+  taskCompletions: [],
+  mysteryBoxes: [],
   loading: false,
 
   loadAll: async (userId) => {
     set({ loading: true });
-    const [{ data: profile }, { data: mistakes }] = await Promise.all([
+    const today = todayDate();
+    const [profileRes, mistakesRes, sessionsRes, taskCompletionsRes, mysteryBoxesRes] = await Promise.all([
       supabase.from("profiles").select("*").eq("id", userId).maybeSingle(),
-      supabase
-        .from("mistakes")
-        .select("*")
-        .eq("user_id", userId)
-        .order("created_at", { ascending: false })
-        .limit(200),
+      supabase.from("mistakes").select("*").eq("user_id", userId).order("created_at", { ascending: false }).limit(200),
+      supabase.from("sessions").select("id,created_at,score,total,duration_seconds,mode,xp_earned").eq("user_id", userId).order("created_at", { ascending: false }).limit(100),
+      supabase.from("task_completions").select("id,task_key,task_label,day_label,completed_on").eq("user_id", userId).eq("completed_on", today),
+      supabase.from("mystery_boxes").select("id,level_number,tier,upgrade_clicks_used,reward_label,opened_at,claimed_at,created_at,updated_at").eq("user_id", userId).order("level_number", { ascending: false }),
     ]);
+
     set({
-      profile: profile as Profile | null,
-      mistakes: (mistakes as any[] as MistakeRecord[]) ?? [],
+      profile: (profileRes.data as Profile | null) ?? null,
+      mistakes: dedupeMistakes(((mistakesRes.data as MistakeRecord[]) ?? [])),
+      sessions: (sessionsRes.data as SessionSummary[]) ?? [],
+      taskCompletions: (taskCompletionsRes.data as TaskCompletion[]) ?? [],
+      mysteryBoxes: (mysteryBoxesRes.data as MysteryBox[]) ?? [],
       loading: false,
     });
+
+    if (profileRes.data) await get().syncBoxes();
+  },
+
+  markTaskComplete: async ({ taskKey, taskLabel, dayLabel }) => {
+    const profile = get().profile;
+    if (!profile) return;
+
+    const { data, error } = await supabase
+      .from("task_completions")
+      .upsert(
+        {
+          user_id: profile.id,
+          task_key: taskKey,
+          task_label: taskLabel,
+          day_label: dayLabel,
+          completed_on: todayDate(),
+        },
+        { onConflict: "user_id,task_key,completed_on" },
+      )
+      .select("id,task_key,task_label,day_label,completed_on")
+      .single();
+
+    if (!error && data) {
+      set((state) => ({
+        taskCompletions: Array.from(
+          new Map([data as TaskCompletion, ...state.taskCompletions].map((item) => [item.task_key, item])).values(),
+        ),
+      }));
+    }
+  },
+
+  syncBoxes: async () => {
+    const profile = get().profile;
+    if (!profile) return;
+
+    const unlockedLevels = Math.max(1, Math.floor(profile.xp / 500) + 1);
+    const existingLevels = new Set(get().mysteryBoxes.map((box) => box.level_number));
+    const missingLevels = Array.from({ length: unlockedLevels }, (_, index) => index + 1).filter(
+      (level) => !existingLevels.has(level),
+    );
+
+    if (missingLevels.length > 0) {
+      await supabase.from("mystery_boxes").insert(
+        missingLevels.map((level) => ({
+          user_id: profile.id,
+          level_number: level,
+          tier: "common" as const,
+          reward_label: `Level ${level} Mystery Box`,
+        })),
+      );
+    }
+
+    const { data } = await supabase
+      .from("mystery_boxes")
+      .select("id,level_number,tier,upgrade_clicks_used,reward_label,opened_at,claimed_at,created_at,updated_at")
+      .eq("user_id", profile.id)
+      .order("level_number", { ascending: false });
+
+    set({ mysteryBoxes: (data as MysteryBox[]) ?? [] });
+  },
+
+  upgradeMysteryBox: async (boxId) => {
+    const box = get().mysteryBoxes.find((entry) => entry.id === boxId);
+    if (!box || box.upgrade_clicks_used >= 3) return null;
+
+    const roll = Math.random();
+    let nextTier = box.tier;
+    if (box.tier === "common" && roll < 0.3) nextTier = "rare";
+    else if (box.tier === "rare" && roll < 0.15) nextTier = "epic";
+    else if (box.tier === "epic" && roll < 0.05) nextTier = "legendary";
+
+    const { data, error } = await supabase
+      .from("mystery_boxes")
+      .update({
+        tier: nextTier,
+        upgrade_clicks_used: box.upgrade_clicks_used + 1,
+        opened_at: box.opened_at ?? new Date().toISOString(),
+      })
+      .eq("id", boxId)
+      .select("id,level_number,tier,upgrade_clicks_used,reward_label,opened_at,claimed_at,created_at,updated_at")
+      .single();
+
+    if (!error && data) {
+      set((state) => ({
+        mysteryBoxes: state.mysteryBoxes.map((entry) => (entry.id === boxId ? (data as MysteryBox) : entry)),
+      }));
+      return data as MysteryBox;
+    }
+
+    return null;
   },
 
   recordMistake: async ({ question, userChoice, timeSpent, reason }) => {
     const profile = get().profile;
     if (!profile) return;
+
+    const existing = get().mistakes.find(
+      (mistake) =>
+        mistake.user_id === profile.id &&
+        mistake.section === question.section &&
+        mistake.topic === question.topic &&
+        mistake.prompt === question.prompt,
+    );
+    if (existing) return;
+
     const { data, error } = await supabase
       .from("mistakes")
       .insert({
@@ -84,41 +239,110 @@ export const useNova = create<NovaState>((set, get) => ({
       })
       .select()
       .single();
+
     if (!error && data) {
-      set((s) => ({ mistakes: [data as any as MistakeRecord, ...s.mistakes] }));
+      set((state) => ({ mistakes: dedupeMistakes([data as MistakeRecord, ...state.mistakes]) }));
     }
   },
 
   awardXP: async (difficulty) => {
     const profile = get().profile;
     if (!profile) return;
+
     const newXP = profile.xp + xpForDifficulty(difficulty);
     const { data } = await supabase
       .from("profiles")
-      .update({ xp: newXP })
+      .update({ xp: newXP, streak: Math.max(1, profile.streak || 0) })
       .eq("id", profile.id)
       .select()
       .single();
-    if (data) set({ profile: data as Profile });
+
+    if (data) {
+      set({ profile: data as Profile });
+      await get().syncBoxes();
+    }
   },
 
   recordSession: async ({ mode, score, total, duration, xpEarned }) => {
     const profile = get().profile;
     if (!profile) return;
-    await supabase.from("sessions").insert({
-      user_id: profile.id,
-      mode,
-      score,
-      total,
-      duration_seconds: duration,
-      xp_earned: xpEarned,
-    });
+
+    const { data } = await supabase
+      .from("sessions")
+      .insert({
+        user_id: profile.id,
+        mode,
+        score,
+        total,
+        duration_seconds: duration,
+        xp_earned: xpEarned,
+      })
+      .select("id,created_at,score,total,duration_seconds,mode,xp_earned")
+      .single();
+
+    const today = todayDate();
+    const lastSessionDate = get().sessions[0]?.created_at?.slice(0, 10);
+    let nextStreak = profile.streak || 0;
+
+    if (lastSessionDate === today) nextStreak = Math.max(1, nextStreak);
+    else if (!lastSessionDate) nextStreak = 1;
+    else {
+      const diffDays = Math.round(
+        (new Date(`${today}T00:00:00`).getTime() - new Date(`${lastSessionDate}T00:00:00`).getTime()) / 86400000,
+      );
+      nextStreak = diffDays === 1 ? nextStreak + 1 : 1;
+    }
+
+    const { data: updatedProfile } = await supabase
+      .from("profiles")
+      .update({ streak: nextStreak })
+      .eq("id", profile.id)
+      .select()
+      .single();
+
+    set((state) => ({
+      sessions: data ? [data as SessionSummary, ...state.sessions] : state.sessions,
+      profile: (updatedProfile as Profile) ?? state.profile,
+    }));
   },
 
   resolveMistake: async (id) => {
-    const { error } = await supabase.from("mistakes").delete().eq("id", id);
-    if (!error) set((s) => ({ mistakes: s.mistakes.filter((m) => m.id !== id) }));
+    const profile = get().profile;
+    if (!profile) return;
+
+    const source = get().mistakes.find((mistake) => mistake.id === id);
+    if (!source) return;
+
+    const { error } = await supabase
+      .from("mistakes")
+      .delete()
+      .eq("user_id", profile.id)
+      .eq("section", source.section)
+      .eq("topic", source.topic)
+      .eq("prompt", source.prompt);
+
+    if (!error) {
+      set((state) => ({
+        mistakes: state.mistakes.filter(
+          (mistake) =>
+            !(
+              mistake.user_id === profile.id &&
+              mistake.section === source.section &&
+              mistake.topic === source.topic &&
+              mistake.prompt === source.prompt
+            ),
+        ),
+      }));
+    }
   },
 
-  reset: () => set({ profile: null, mistakes: [], loading: false }),
+  reset: () =>
+    set({
+      profile: null,
+      mistakes: [],
+      sessions: [],
+      taskCompletions: [],
+      mysteryBoxes: [],
+      loading: false,
+    }),
 }));
