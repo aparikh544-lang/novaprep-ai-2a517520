@@ -46,10 +46,10 @@ Deno.serve(async (req) => {
     else if (difficultyBias === "easier") diffInstruction = "Skew difficulty toward 'easy' and 'medium'.";
     else diffInstruction = "Mix easy/medium/hard.";
 
-    const systemPrompt = `You are an expert SAT tutor creating ORIGINAL practice questions. Never copy from College Board, Bluebook, or official PSAT/SAT releases. Each question must be wholly your own invention. Topics for Math: ${TOPICS_MATH.join(", ")}. Topics for Reading & Writing: ${TOPICS_RW.join(", ")}. Reading questions must include a short original passage (40-90 words). Each question has exactly 4 choices and one correct index 0-3. Explanations must be concise (1-3 sentences) and teach the underlying concept.`;
+    const systemPrompt = `You are an expert SAT tutor creating ORIGINAL SAT-level practice questions only. Never create below-SAT difficulty items, never copy from official material, and never reveal hidden reasoning, chain-of-thought, self-reflection, or internal notes. Topics for Math: ${TOPICS_MATH.join(", ")}. Topics for Reading & Writing: ${TOPICS_RW.join(", ")}. Reading questions must include a short original passage (40-90 words). Each question has exactly 4 choices and one correct index 0-3. Double-check correctness before returning. Explanations must be concise (1-2 sentences), student-facing, and contain only the final explanation.`;
 
     const topicInstruction = topic ? `Focus every question on this skill/topic: ${topic}.` : "Vary topics.";
-    const userPrompt = `Generate ${count} original SAT-style multiple-choice questions. ${sectionInstruction} ${diffInstruction} ${topicInstruction} Use actual newline characters for multi-line math or passages, never escaped literal \\n text. Use the provided tool to return them.`;
+    const userPrompt = `Generate ${count} original SAT-style multiple-choice questions. ${sectionInstruction} ${diffInstruction} ${topicInstruction} Keep every question at authentic SAT rigor. Use actual newline characters for multi-line math or passages, never escaped literal \\n text. Return only polished final questions through the tool.`;
 
     const aiResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
