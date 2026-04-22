@@ -1,10 +1,13 @@
 import { useNavigate } from "react-router-dom";
-import { Target, Zap, BookOpen, Calculator } from "lucide-react";
+import { Target, Zap, BookOpen, Calculator, Trophy } from "lucide-react";
 import { AppLayout } from "@/components/AppLayout";
 import { GlassCard } from "@/components/GlassCard";
+import { useNova } from "@/lib/novaprep-store";
 
 const Practice = () => {
   const nav = useNavigate();
+  const mistakes = useNova((s) => s.mistakes);
+  const weakTopic = mistakes[0]?.topic ?? "Mixed SAT Skills";
 
   const sessions = [
     {
@@ -38,11 +41,20 @@ const Practice = () => {
     {
       id: "redemption",
       icon: Zap,
-      title: "Redemption Round",
-      desc: "Fresh AI-generated questions targeted to your weakest skills — not copied from the Mistake Bank.",
-      cta: "Redeem",
+      title: "Weak-Skill Arena",
+      desc: `Fresh AI-generated questions tuned to ${weakTopic}; use Mistake Bank Review only when you want to clear saved misses.`,
+      cta: "Enter Arena",
       duration: "8 min",
-      route: "/test/redemption",
+      route: `/test/redemption?topic=${encodeURIComponent(weakTopic)}`,
+    },
+    {
+      id: "review",
+      icon: Trophy,
+      title: "Vault Review",
+      desc: "Re-answer saved mistakes. Correct answers remove those questions from your Mistake Bank.",
+      cta: "Clear Mistakes",
+      duration: "15 min",
+      route: "/test/review",
     },
   ];
 
@@ -57,7 +69,7 @@ const Practice = () => {
         </p>
       </div>
 
-      <div className="grid md:grid-cols-2 gap-5">
+      <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-5 items-stretch">
         {sessions.map((s) => (
           <GlassCard
             key={s.id}
