@@ -19,9 +19,7 @@ function fmtTime(s: number) {
 const MODULE_SIZE: Record<Mode, number> = { full: 54, reading: 27, math: 22, redemption: 12, review: 10 };
 const MODULE_LIMIT: Record<Mode, number> = { full: 64 * 60, reading: 32 * 60, math: 35 * 60, redemption: 18 * 60, review: 15 * 60 };
 
-const textLines = (text: string) => text.replace(/\n/g, "
-").split("
-");
+const textLines = (text: string) => text.replace(/\\n/g, "\n").split("\n");
 const renderText = (text: string) => textLines(text).map((line, i, arr) => <span key={i}>{line}{i < arr.length - 1 && <br />}</span>);
 const normalizeSPR = (value: AnswerValue | undefined) => String(value ?? "").trim().toLowerCase().replace(/\s+/g, "");
 const isCorrectAnswer = (q: Question, answer: AnswerValue | undefined) => {
