@@ -67,6 +67,7 @@ interface NovaState {
   syncBoxes: () => Promise<void>;
   upgradeMysteryBox: (boxId: string) => Promise<MysteryBox | null>;
   openMysteryBox: (boxId: string) => Promise<BoxReward | null>;
+  buyXPBoost: () => Promise<boolean>;
   recordMistake: (m: {
     question: Question;
     userChoice: number;
@@ -229,6 +230,27 @@ export const useNova = create<NovaState>((set, get) => ({
     }
 
     return null;
+  },
+
+  buyXPBoost: async () => {
+    const profile = get().profile;
+    if (!profile || (profile.sp ?? 0) < 25) return false;
+
+    const currentBoost = profile.xp_boost_until && new Date(profile.xp_boost_until).getTime() > Date.now()
+      ? new Date(profile.xp_boost_until).getTime()
+      : Date.now();
+    const { data } = await supabase
+      .from("profiles")
+      .update({ sp: (profile.sp ?? 0) - 25, xp_boost_until: new Date(currentBoost + 15 * 60_000).toISOString() } as any)
+      .eq("id", profile.id)
+      .select()
+      .single();
+
+    if (data) {
+      set({ profile: data as Profile });
+      return true;
+    }
+    return false;
   },
 
   openMysteryBox: async (boxId) => {

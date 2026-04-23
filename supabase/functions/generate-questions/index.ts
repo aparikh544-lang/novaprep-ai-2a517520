@@ -46,10 +46,10 @@ Deno.serve(async (req) => {
     else if (difficultyBias === "easier") diffInstruction = "Skew difficulty toward 'easy' and 'medium'.";
     else diffInstruction = "Mix easy/medium/hard.";
 
-    const systemPrompt = `You are an expert SAT tutor creating ORIGINAL SAT-level practice questions only. Never create below-SAT difficulty items, never copy from official material, and never reveal hidden reasoning, chain-of-thought, self-reflection, or internal notes. Topics for Math: ${TOPICS_MATH.join(", ")}. Topics for Reading & Writing: ${TOPICS_RW.join(", ")}. Reading questions must include a short original passage (40-90 words). Each question has exactly 4 choices and one correct index 0-3. Double-check correctness before returning. Explanations must be concise (1-2 sentences), student-facing, and contain only the final explanation.`;
+    const systemPrompt = `You are an expert SAT tutor creating ORIGINAL SAT-level practice questions only. Never create below-SAT difficulty items, never copy from official material, and never reveal hidden reasoning, chain-of-thought, self-reflection, or internal notes. Topics for Math: ${TOPICS_MATH.join(", ")}. Topics for Reading & Writing: ${TOPICS_RW.join(", ")}. Reading questions must include a short original passage (40-90 words). Reading & Writing questions must be multiple-choice. Math questions should be about 75% multiple-choice and 25% student-produced response; student-produced response items still include 4 plausible choices for storage but must also include correctText and responseType="spr". Double-check correctness before returning. Explanations must be concise (1-2 sentences), student-facing, and contain only the final explanation.`;
 
     const topicInstruction = topic ? `Focus every question on this skill/topic: ${topic}.` : "Vary topics.";
-    const userPrompt = `Generate ${count} original SAT-style multiple-choice questions. ${sectionInstruction} ${diffInstruction} ${topicInstruction} Keep every question at authentic SAT rigor. Use actual newline characters for multi-line math or passages, never escaped literal \\n text. Return only polished final questions through the tool.`;
+    const userPrompt = `Generate ${count} original SAT-style questions. ${sectionInstruction} ${diffInstruction} ${topicInstruction} Keep every question at authentic SAT rigor. Use actual newline characters for multi-line math or passages, never escaped literal \\n text. Return only polished final questions through the tool. For Reading & Writing use responseType="multiple-choice". For Math, make every fourth item responseType="spr" and include a concise correctText answer; the rest are responseType="multiple-choice".`;
 
     const aiResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -84,9 +84,11 @@ Deno.serve(async (req) => {
                         prompt: { type: "string" },
                         choices: { type: "array", items: { type: "string" }, minItems: 4, maxItems: 4 },
                         correct: { type: "integer", minimum: 0, maximum: 3 },
+                        responseType: { type: "string", enum: ["multiple-choice", "spr"] },
+                        correctText: { type: "string", description: "Required for student-produced Math responses." },
                         explanation: { type: "string" },
                       },
-                      required: ["section", "topic", "difficulty", "prompt", "choices", "correct", "explanation"],
+                      required: ["section", "topic", "difficulty", "prompt", "choices", "correct", "responseType", "explanation"],
                       additionalProperties: false,
                     },
                   },

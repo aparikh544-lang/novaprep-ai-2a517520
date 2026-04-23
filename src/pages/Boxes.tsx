@@ -1,8 +1,8 @@
-import { useState } from "react";
-import { Gift, Sparkles, Star, Gem, Zap, Box, PartyPopper } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Gift, Sparkles, Star, Gem, Zap, Box, PartyPopper, Wand2 } from "lucide-react";
 import { AppLayout } from "@/components/AppLayout";
 import { GlassCard } from "@/components/GlassCard";
-import { useNova, BoxReward } from "@/lib/novaprep-store";
+import { useNova, BoxReward, MysteryBox } from "@/lib/novaprep-store";
 import { toast } from "@/hooks/use-toast";
 
 const tierStyles = {
@@ -20,24 +20,41 @@ const Boxes = () => {
   const profile = useNova((s) => s.profile);
   const upgradeMysteryBox = useNova((s) => s.upgradeMysteryBox);
   const openMysteryBox = useNova((s) => s.openMysteryBox);
-  const [revealing, setRevealing] = useState<string | null>(null);
+  const unopened = useMemo(() => boxes.filter((box) => !box.reward_payload && !box.claimed_at), [boxes]);
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [opening, setOpening] = useState(false);
   const [lastReward, setLastReward] = useState<BoxReward | null>(null);
+  const activeBox = boxes.find((box) => box.id === activeId) ?? null;
 
-  const onUpgrade = async (boxId: string) => {
-    const result = await upgradeMysteryBox(boxId);
-    if (!result) return;
-    toast({ title: `${tierLabels[result.tier]} box`, description: `${3 - result.upgrade_clicks_used} upgrade taps left.` });
+  const beginOpening = () => {
+    if (!unopened.length) return;
+    setLastReward(null);
+    setActiveId(unopened[0].id);
   };
 
-  const onOpen = async (boxId: string) => {
-    setRevealing(boxId);
+  const onTap = async (box: MysteryBox) => {
+    if (box.upgrade_clicks_used >= 3) return;
+    const before = box.tier;
+    const result = await upgradeMysteryBox(box.id);
+    if (!result) return;
+    toast({ title: result.tier !== before ? `${tierLabels[result.tier]} upgrade!` : "No upgrade", description: `${3 - result.upgrade_clicks_used} taps left.` });
+  };
+
+  const onOpen = async (box: MysteryBox) => {
+    setOpening(true);
     setLastReward(null);
     window.setTimeout(async () => {
-      const reward = await openMysteryBox(boxId);
+      const reward = await openMysteryBox(box.id);
       setLastReward(reward);
-      setRevealing(null);
+      setOpening(false);
       if (reward) toast({ title: "Reward unlocked", description: reward.label });
-    }, 900);
+    }, 1100);
+  };
+
+  const nextBox = () => {
+    const remaining = unopened.filter((box) => box.id !== activeId);
+    setLastReward(null);
+    setActiveId(remaining[0]?.id ?? null);
   };
 
   return (
@@ -46,34 +63,46 @@ const Boxes = () => {
         <div>
           <span className="text-xs uppercase tracking-[0.25em] text-secondary">Reward Bay</span>
           <h1 className="font-display text-4xl font-bold mt-1">Mystery Boxes</h1>
-          <p className="text-muted-foreground mt-2 max-w-2xl">Tap up to 3 times to upgrade, then crack it open Starr Drop-style for SP or timed 2x XP.</p>
+          <p className="text-muted-foreground mt-2 max-w-2xl">Open level rewards Starr Drop-style: tap each box up to 3 times, then reveal SP or timed 2x XP.</p>
         </div>
-        <div className="glass px-4 py-3 text-sm text-muted-foreground">{boxes.length} unlocked · {(profile?.sp ?? 0).toLocaleString()} SP</div>
+        <div className="flex flex-wrap gap-2">
+          <div className="glass px-4 py-3 text-sm text-muted-foreground">{unopened.length} unopened · {(profile?.sp ?? 0).toLocaleString()} SP</div>
+          <button onClick={beginOpening} disabled={!unopened.length} className="rounded-lg bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground disabled:opacity-50">Open boxes</button>
+        </div>
       </div>
 
-      {revealing && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-xl animate-fade-in">
-          <div className="text-center">
-            <div className="mx-auto flex h-40 w-40 items-center justify-center rounded-[2rem] border border-primary/40 bg-gradient-to-br from-primary/25 to-secondary/25 glow-purple animate-[pulse_0.55s_ease-in-out_infinite]">
-              <Box className="h-20 w-20 text-secondary" />
+      {activeBox && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/85 backdrop-blur-xl animate-fade-in p-5">
+          <div className="glass glass-purple max-w-md w-full p-8 text-center overflow-hidden relative">
+            <div className={opening ? "absolute inset-0 bg-primary/20 animate-pulse" : ""} />
+            <div className="relative z-10">
+              <span className="text-xs uppercase tracking-[0.25em] text-secondary">Level {activeBox.level_number} Drop</span>
+              <div className={`mx-auto mt-6 flex h-44 w-44 items-center justify-center rounded-[2rem] border bg-gradient-to-br from-primary/25 to-secondary/25 ${opening ? "animate-[pulse_0.35s_ease-in-out_infinite] glow-purple" : "animate-float"}`}>
+                <Box className="h-24 w-24 text-secondary" />
+              </div>
+              <h2 className="mt-6 font-display text-3xl font-bold text-gradient-nebula">{tierLabels[activeBox.tier]} Drop</h2>
+              <p className="mt-2 text-sm text-muted-foreground">{Math.max(0, 3 - activeBox.upgrade_clicks_used)} upgrade taps left</p>
+
+              {lastReward ? (
+                <div className="mt-6 animate-scale-in rounded-xl border border-success/30 bg-success/10 p-4">
+                  {lastReward.type === "sp" ? <Gem className="mx-auto h-7 w-7 text-secondary" /> : <Zap className="mx-auto h-7 w-7 text-warning" />}
+                  <div className="mt-2 font-display text-xl font-semibold">{lastReward.label}</div>
+                  <button onClick={nextBox} className="mt-4 w-full rounded-lg bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground">{unopened.length > 1 ? "Next box" : "Done"}</button>
+                </div>
+              ) : (
+                <div className="mt-6 grid grid-cols-2 gap-2">
+                  <button onClick={() => onTap(activeBox)} disabled={activeBox.upgrade_clicks_used >= 3 || opening} className="rounded-lg border border-border bg-muted/40 px-4 py-3 text-sm font-medium disabled:opacity-50 inline-flex items-center justify-center gap-2"><Wand2 className="h-4 w-4" /> Tap</button>
+                  <button onClick={() => onOpen(activeBox)} disabled={opening} className="rounded-lg bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground disabled:opacity-50">Open</button>
+                </div>
+              )}
+              <button onClick={() => setActiveId(null)} className="mt-4 text-xs text-muted-foreground hover:text-foreground">Close</button>
             </div>
-            <p className="mt-6 font-display text-3xl font-bold text-gradient-nebula">Opening…</p>
           </div>
         </div>
-      )}
-
-      {lastReward && (
-        <GlassCard variant="cyan" className="mb-5 flex items-center gap-4 animate-scale-in">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/15 border border-primary/30">
-            {lastReward.type === "sp" ? <Gem className="h-6 w-6 text-secondary" /> : <Zap className="h-6 w-6 text-warning" />}
-          </div>
-          <div><h2 className="font-display text-xl font-semibold">You got {lastReward.label}</h2><p className="text-sm text-muted-foreground">Reward added to your profile.</p></div>
-        </GlassCard>
       )}
 
       <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
         {boxes.map((box) => {
-          const remaining = Math.max(0, 3 - box.upgrade_clicks_used);
           const Icon = tierIcon[box.tier];
           const opened = Boolean(box.reward_payload || box.claimed_at);
           return (
@@ -86,13 +115,7 @@ const Boxes = () => {
                 </div>
                 <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-border bg-background/30 animate-float"><Icon className={box.tier === "legendary" ? "h-7 w-7 text-warning" : "h-7 w-7 text-secondary"} /></div>
               </div>
-
-              <div className="mt-6 flex items-center justify-between text-xs text-muted-foreground"><span>{remaining} upgrade taps left</span><span>{opened ? "Opened" : tierLabels[box.tier]}</span></div>
-
-              <div className="mt-4 grid grid-cols-2 gap-2">
-                <button onClick={() => onUpgrade(box.id)} disabled={remaining === 0 || opened} className="rounded-lg border border-border bg-muted/40 px-4 py-3 text-sm font-medium transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50">Upgrade</button>
-                <button onClick={() => onOpen(box.id)} disabled={opened} className="rounded-lg bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50">Open</button>
-              </div>
+              <button onClick={() => setActiveId(box.id)} disabled={opened} className="mt-6 w-full rounded-lg bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50">{opened ? "Opened" : "Open sequence"}</button>
             </GlassCard>
           );
         })}

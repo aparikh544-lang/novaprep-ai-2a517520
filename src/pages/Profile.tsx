@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Award, CalendarDays, Flame, Medal, ShieldCheck, Star, Target, Trophy, UserCircle, Zap, Gem, Clock3, BookOpenCheck, Crown } from "lucide-react";
 import { AppLayout } from "@/components/AppLayout";
@@ -19,6 +19,10 @@ const badgeCatalog = [
   { name: "Marathon Mind", icon: Clock3, test: (s: any) => s.hours >= 5, detail: "Log 5 hours" },
   { name: "Rank Climber", icon: Medal, test: (s: any) => s.level >= 10, detail: "Reach level 10" },
   { name: "Commander Track", icon: Crown, test: (s: any) => s.level >= 30, detail: "Reach level 30" },
+  { name: "Early Bird", icon: CalendarDays, test: (s: any) => Boolean(s.testDate), detail: "Set a test date" },
+  { name: "Goal Setter", icon: Target, test: (s: any) => Boolean(s.targetScore), detail: "Set a target score" },
+  { name: "Pace Breaker", icon: Clock3, test: (s: any) => s.avgPace > 0 && s.avgPace <= 75, detail: "Average 75 seconds or faster" },
+  { name: "Consistency Core", icon: Flame, test: (s: any) => s.sessions >= 5, detail: "Complete 5 sessions" },
 ];
 
 const Profile = () => {
@@ -34,7 +38,13 @@ const Profile = () => {
   const [displayName, setDisplayName] = useState(profile?.display_name ?? "");
   const [targetScore, setTargetScore] = useState(String(profile?.target_score ?? ""));
   const [testDate, setTestDate] = useState(profile?.test_date ?? "");
-  const badgeState = { sessions: sessions.length, accuracy: stats.accuracy, bestAccuracy: stats.bestAccuracy, mistakes: mistakes.length, streak: profile?.streak ?? 0, xp, sp: profile?.sp ?? 0, hours: stats.hoursLogged, level: rank.level };
+  const badgeState = { sessions: sessions.length, accuracy: stats.accuracy, bestAccuracy: stats.bestAccuracy, mistakes: mistakes.length, streak: profile?.streak ?? 0, xp, sp: profile?.sp ?? 0, hours: stats.hoursLogged, level: rank.level, targetScore: profile?.target_score, testDate: profile?.test_date, avgPace: stats.avgPace };
+
+  useEffect(() => {
+    setDisplayName(profile?.display_name ?? "");
+    setTargetScore(String(profile?.target_score ?? ""));
+    setTestDate(profile?.test_date ?? "");
+  }, [profile?.display_name, profile?.target_score, profile?.test_date]);
 
   const save = async () => {
     await updateProfile({ display_name: displayName || null, target_score: targetScore ? Number(targetScore) : null, test_date: testDate || null });
@@ -69,7 +79,7 @@ const Profile = () => {
 
       <div className="mt-6 grid lg:grid-cols-[0.75fr_1.25fr] gap-6 items-start">
         <GlassCard variant="cyan">
-          <h2 className="font-display text-2xl font-semibold">Sync Profile</h2>
+          <h2 className="font-display text-2xl font-semibold">Profile Details</h2>
           <div className="mt-4 space-y-3">
             <input value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder="Display name" className="w-full rounded-lg border border-border bg-background/50 px-3 py-2 text-sm" />
             <div className="grid grid-cols-2 gap-3">

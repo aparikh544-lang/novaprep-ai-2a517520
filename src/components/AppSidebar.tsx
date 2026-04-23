@@ -8,6 +8,7 @@ import {
   BarChart3,
   UserCircle,
   Gift,
+  ShoppingBag,
   Rocket,
   LogOut,
 } from "lucide-react";
@@ -24,6 +25,7 @@ const items = [
   { to: "/analytics", label: "Analytics", icon: BarChart3 },
   { to: "/profile", label: "Profile", icon: UserCircle },
   { to: "/boxes", label: "Boxes", icon: Gift },
+  { to: "/store", label: "Store", icon: ShoppingBag },
 ];
 
 export function AppSidebar() {

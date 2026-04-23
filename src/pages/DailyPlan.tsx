@@ -71,7 +71,7 @@ const DailyPlan = () => {
                 </div>
                 <div className="flex-1 grid sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
                   {day.blocks.map((b, j) => {
-                    const completed = taskCompletions.some((item) => item.task_key === taskCompletionKey(day.day, b.task));
+                    const completed = taskCompletions.some((item) => item.task_key === taskCompletionKey(day.day, b.task) || item.task_label === b.task);
                     return (
                       <Link
                         key={j}
