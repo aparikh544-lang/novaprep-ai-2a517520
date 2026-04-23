@@ -15,7 +15,13 @@ interface Profile {
   test_date: string | null;
   xp: number;
   streak: number;
+  sp?: number;
+  xp_boost_until?: string | null;
 }
+
+export type BoxReward =
+  | { type: "sp"; amount: number; label: string }
+  | { type: "xp_boost"; multiplier: 2; minutes: number; label: string };
 
 export interface SessionSummary {
   id: string;
@@ -43,6 +49,7 @@ export interface MysteryBox {
   reward_label: string | null;
   opened_at: string | null;
   claimed_at: string | null;
+  reward_payload?: BoxReward | null;
   created_at: string;
   updated_at: string;
 }
@@ -58,13 +65,14 @@ interface NovaState {
   markTaskComplete: (task: { taskKey: string; taskLabel: string; dayLabel: string }) => Promise<void>;
   syncBoxes: () => Promise<void>;
   upgradeMysteryBox: (boxId: string) => Promise<MysteryBox | null>;
+  openMysteryBox: (boxId: string) => Promise<BoxReward | null>;
   recordMistake: (m: {
     question: Question;
     userChoice: number;
     timeSpent: number;
     reason: ErrorReason;
   }) => Promise<void>;
-  awardXP: (difficulty: Difficulty) => Promise<void>;
+  awardXP: (difficulty: Difficulty) => Promise<number>;
   recordSession: (s: {
     mode: string;
     score: number;
