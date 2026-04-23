@@ -223,6 +223,36 @@ export const useNova = create<NovaState>((set, get) => ({
     return null;
   },
 
+  openMysteryBox: async (boxId) => {
+    const profile = get().profile;
+    const box = get().mysteryBoxes.find((entry) => entry.id === boxId);
+    if (!profile || !box || box.reward_payload || box.claimed_at) return null;
+
+    const reward = rewardForTier(box.tier);
+    const patch = reward.type === "sp"
+      ? { sp: (profile.sp ?? 0) + reward.amount }
+      : { xp_boost_until: new Date(Date.now() + reward.minutes * 60_000).toISOString() };
+
+    const [{ data: updatedBox, error }, { data: updatedProfile }] = await Promise.all([
+      supabase
+        .from("mystery_boxes")
+        .update({ reward_payload: reward, opened_at: new Date().toISOString(), claimed_at: new Date().toISOString() })
+        .eq("id", boxId)
+        .select("id,level_number,tier,upgrade_clicks_used,reward_label,opened_at,claimed_at,reward_payload,created_at,updated_at")
+        .single(),
+      supabase.from("profiles").update(patch).eq("id", profile.id).select().single(),
+    ]);
+
+    if (!error && updatedBox) {
+      set((state) => ({
+        profile: (updatedProfile as Profile) ?? state.profile,
+        mysteryBoxes: state.mysteryBoxes.map((entry) => (entry.id === boxId ? (updatedBox as MysteryBox) : entry)),
+      }));
+      return reward;
+    }
+    return null;
+  },
+
   recordMistake: async ({ question, userChoice, timeSpent, reason }) => {
     const profile = get().profile;
     if (!profile) return;
@@ -262,9 +292,12 @@ export const useNova = create<NovaState>((set, get) => ({
 
   awardXP: async (difficulty) => {
     const profile = get().profile;
-    if (!profile) return;
+    if (!profile) return 0;
 
-    const newXP = profile.xp + xpForDifficulty(difficulty);
+    const baseXP = xpForDifficulty(difficulty);
+    const boosted = profile.xp_boost_until && new Date(profile.xp_boost_until).getTime() > Date.now();
+    const gained = boosted ? baseXP * 2 : baseXP;
+    const newXP = profile.xp + gained;
     const { data } = await supabase
       .from("profiles")
       .update({ xp: newXP, streak: Math.max(1, profile.streak || 0) })
@@ -276,6 +309,7 @@ export const useNova = create<NovaState>((set, get) => ({
       set({ profile: data as Profile });
       await get().syncBoxes();
     }
+    return gained;
   },
 
   recordSession: async ({ mode, score, total, duration, xpEarned }) => {
