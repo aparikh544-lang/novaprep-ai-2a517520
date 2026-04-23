@@ -74,7 +74,7 @@ const TestSession = () => {
     if (current) setTimeByQuestion((prev) => ({ ...prev, [current.id]: (prev[current.id] ?? 0) + elapsed }));
   };
 
-  const prepareQuestions = (qs: Question[], targetModule: 1 | 2) => qs.map((question, index) => ({
+  const prepareQuestions = (qs: Question[], targetModule: 1 | 2): Question[] => qs.map((question, index): Question => ({
     ...question,
     responseType: question.section === "Math" && index % 4 === 3 ? "spr" : "multiple-choice",
     choices: question.section === "Math" && index % 4 === 3 ? question.choices : question.choices,
