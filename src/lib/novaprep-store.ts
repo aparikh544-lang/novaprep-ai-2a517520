@@ -15,7 +15,13 @@ interface Profile {
   test_date: string | null;
   xp: number;
   streak: number;
+  sp?: number;
+  xp_boost_until?: string | null;
 }
+
+export type BoxReward =
+  | { type: "sp"; amount: number; label: string }
+  | { type: "xp_boost"; multiplier: 2; minutes: number; label: string };
 
 export interface SessionSummary {
   id: string;
@@ -43,6 +49,7 @@ export interface MysteryBox {
   reward_label: string | null;
   opened_at: string | null;
   claimed_at: string | null;
+  reward_payload?: BoxReward | null;
   created_at: string;
   updated_at: string;
 }
@@ -55,16 +62,18 @@ interface NovaState {
   mysteryBoxes: MysteryBox[];
   loading: boolean;
   loadAll: (userId: string) => Promise<void>;
+  updateProfile: (patch: Partial<Pick<Profile, "display_name" | "target_score" | "test_date">>) => Promise<void>;
   markTaskComplete: (task: { taskKey: string; taskLabel: string; dayLabel: string }) => Promise<void>;
   syncBoxes: () => Promise<void>;
   upgradeMysteryBox: (boxId: string) => Promise<MysteryBox | null>;
+  openMysteryBox: (boxId: string) => Promise<BoxReward | null>;
   recordMistake: (m: {
     question: Question;
     userChoice: number;
     timeSpent: number;
     reason: ErrorReason;
   }) => Promise<void>;
-  awardXP: (difficulty: Difficulty) => Promise<void>;
+  awardXP: (difficulty: Difficulty) => Promise<number>;
   recordSession: (s: {
     mode: string;
     score: number;
@@ -88,6 +97,14 @@ const dedupeMistakes = (mistakes: MistakeRecord[]) =>
     ).values(),
   );
 
+const rewardForTier = (tier: MysteryBox["tier"]): BoxReward => {
+  const roll = Math.random();
+  if (tier === "common") return roll < 0.5 ? { type: "sp", amount: 5, label: "5 SP" } : { type: "xp_boost", multiplier: 2, minutes: 10, label: "2x XP · 10 min" };
+  if (tier === "rare") return roll < 0.45 ? { type: "sp", amount: 10, label: "10 SP" } : roll < 0.9 ? { type: "xp_boost", multiplier: 2, minutes: 20, label: "2x XP · 20 min" } : { type: "sp", amount: 20, label: "20 SP" };
+  if (tier === "epic") return roll < 0.45 ? { type: "sp", amount: 20, label: "20 SP" } : roll < 0.9 ? { type: "xp_boost", multiplier: 2, minutes: 30, label: "2x XP · 30 min" } : { type: "sp", amount: 40, label: "40 SP" };
+  return roll < 0.5 ? { type: "sp", amount: 40, label: "40 SP" } : { type: "xp_boost", multiplier: 2, minutes: 60, label: "2x XP · 1 hr" };
+};
+
 export const useNova = create<NovaState>((set, get) => ({
   profile: null,
   mistakes: [],
@@ -104,7 +121,7 @@ export const useNova = create<NovaState>((set, get) => ({
       supabase.from("mistakes").select("*").eq("user_id", userId).order("created_at", { ascending: false }).limit(200),
       supabase.from("sessions").select("id,created_at,score,total,duration_seconds,mode,xp_earned").eq("user_id", userId).order("created_at", { ascending: false }).limit(100),
       supabase.from("task_completions").select("id,task_key,task_label,day_label,completed_on").eq("user_id", userId).eq("completed_on", today),
-      supabase.from("mystery_boxes").select("id,level_number,tier,upgrade_clicks_used,reward_label,opened_at,claimed_at,created_at,updated_at").eq("user_id", userId).order("level_number", { ascending: false }),
+      supabase.from("mystery_boxes").select("id,level_number,tier,upgrade_clicks_used,reward_label,opened_at,claimed_at,reward_payload,created_at,updated_at").eq("user_id", userId).order("level_number", { ascending: false }),
     ]);
 
     set({
@@ -117,6 +134,13 @@ export const useNova = create<NovaState>((set, get) => ({
     });
 
     if (profileRes.data) await get().syncBoxes();
+  },
+
+  updateProfile: async (patch) => {
+    const profile = get().profile;
+    if (!profile) return;
+    const { data } = await supabase.from("profiles").update(patch).eq("id", profile.id).select().single();
+    if (data) set({ profile: data as Profile });
   },
 
   markTaskComplete: async ({ taskKey, taskLabel, dayLabel }) => {
@@ -170,7 +194,7 @@ export const useNova = create<NovaState>((set, get) => ({
 
     const { data } = await supabase
       .from("mystery_boxes")
-      .select("id,level_number,tier,upgrade_clicks_used,reward_label,opened_at,claimed_at,created_at,updated_at")
+      .select("id,level_number,tier,upgrade_clicks_used,reward_label,opened_at,claimed_at,reward_payload,created_at,updated_at")
       .eq("user_id", profile.id)
       .order("level_number", { ascending: false });
 
@@ -192,10 +216,9 @@ export const useNova = create<NovaState>((set, get) => ({
       .update({
         tier: nextTier,
         upgrade_clicks_used: box.upgrade_clicks_used + 1,
-        opened_at: box.opened_at ?? new Date().toISOString(),
       })
       .eq("id", boxId)
-      .select("id,level_number,tier,upgrade_clicks_used,reward_label,opened_at,claimed_at,created_at,updated_at")
+      .select("id,level_number,tier,upgrade_clicks_used,reward_label,opened_at,claimed_at,reward_payload,created_at,updated_at")
       .single();
 
     if (!error && data) {
@@ -205,6 +228,36 @@ export const useNova = create<NovaState>((set, get) => ({
       return data as MysteryBox;
     }
 
+    return null;
+  },
+
+  openMysteryBox: async (boxId) => {
+    const profile = get().profile;
+    const box = get().mysteryBoxes.find((entry) => entry.id === boxId);
+    if (!profile || !box || box.reward_payload || box.claimed_at) return null;
+
+    const reward = rewardForTier(box.tier);
+    const patch = reward.type === "sp"
+      ? { sp: (profile.sp ?? 0) + reward.amount }
+      : { xp_boost_until: new Date(Date.now() + reward.minutes * 60_000).toISOString() };
+
+    const [{ data: updatedBox, error }, { data: updatedProfile }] = await Promise.all([
+      supabase
+      .from("mystery_boxes")
+      .update({ reward_payload: reward, opened_at: new Date().toISOString(), claimed_at: new Date().toISOString() } as any)
+        .eq("id", boxId)
+        .select("id,level_number,tier,upgrade_clicks_used,reward_label,opened_at,claimed_at,reward_payload,created_at,updated_at")
+        .single(),
+      supabase.from("profiles").update(patch as any).eq("id", profile.id).select().single(),
+    ]);
+
+    if (!error && updatedBox) {
+      set((state) => ({
+        profile: (updatedProfile as Profile) ?? state.profile,
+        mysteryBoxes: state.mysteryBoxes.map((entry) => (entry.id === boxId ? (updatedBox as MysteryBox) : entry)),
+      }));
+      return reward;
+    }
     return null;
   },
 
@@ -247,9 +300,12 @@ export const useNova = create<NovaState>((set, get) => ({
 
   awardXP: async (difficulty) => {
     const profile = get().profile;
-    if (!profile) return;
+    if (!profile) return 0;
 
-    const newXP = profile.xp + xpForDifficulty(difficulty);
+    const baseXP = xpForDifficulty(difficulty);
+    const boosted = profile.xp_boost_until && new Date(profile.xp_boost_until).getTime() > Date.now();
+    const gained = boosted ? baseXP * 2 : baseXP;
+    const newXP = profile.xp + gained;
     const { data } = await supabase
       .from("profiles")
       .update({ xp: newXP, streak: Math.max(1, profile.streak || 0) })
@@ -261,6 +317,7 @@ export const useNova = create<NovaState>((set, get) => ({
       set({ profile: data as Profile });
       await get().syncBoxes();
     }
+    return gained;
   },
 
   recordSession: async ({ mode, score, total, duration, xpEarned }) => {

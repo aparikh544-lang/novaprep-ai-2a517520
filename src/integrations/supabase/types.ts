@@ -73,6 +73,7 @@ export type Database = {
           level_number: number
           opened_at: string | null
           reward_label: string | null
+          reward_payload: Json | null
           tier: Database["public"]["Enums"]["box_tier"]
           updated_at: string
           upgrade_clicks_used: number
@@ -85,6 +86,7 @@ export type Database = {
           level_number: number
           opened_at?: string | null
           reward_label?: string | null
+          reward_payload?: Json | null
           tier?: Database["public"]["Enums"]["box_tier"]
           updated_at?: string
           upgrade_clicks_used?: number
@@ -97,6 +99,7 @@ export type Database = {
           level_number?: number
           opened_at?: string | null
           reward_label?: string | null
+          reward_payload?: Json | null
           tier?: Database["public"]["Enums"]["box_tier"]
           updated_at?: string
           upgrade_clicks_used?: number
@@ -117,31 +120,37 @@ export type Database = {
           created_at: string
           display_name: string | null
           id: string
+          sp: number
           streak: number
           target_score: number | null
           test_date: string | null
           updated_at: string
           xp: number
+          xp_boost_until: string | null
         }
         Insert: {
           created_at?: string
           display_name?: string | null
           id: string
+          sp?: number
           streak?: number
           target_score?: number | null
           test_date?: string | null
           updated_at?: string
           xp?: number
+          xp_boost_until?: string | null
         }
         Update: {
           created_at?: string
           display_name?: string | null
           id?: string
+          sp?: number
           streak?: number
           target_score?: number | null
           test_date?: string | null
           updated_at?: string
           xp?: number
+          xp_boost_until?: string | null
         }
         Relationships: []
       }

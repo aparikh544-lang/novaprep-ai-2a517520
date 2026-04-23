@@ -14,12 +14,14 @@ import { useNova } from "@/lib/novaprep-store";
 import { rankFromXP } from "@/lib/novaprep-data";
 import { buildFlightPlan } from "@/lib/flight-plan";
 import { routeForTask } from "@/lib/practice-links";
+import { taskCompletionKey } from "@/lib/practice-links";
 import { deriveNovaStats } from "@/lib/novaprep-stats";
 
 const Dashboard = () => {
   const profile = useNova((s) => s.profile);
   const mistakes = useNova((s) => s.mistakes);
   const sessions = useNova((s) => s.sessions);
+  const taskCompletions = useNova((s) => s.taskCompletions);
   const xp = profile?.xp ?? 0;
   const streak = profile?.streak ?? 0;
   const info = rankFromXP(xp);
@@ -94,16 +96,18 @@ const Dashboard = () => {
             </Link>
           </div>
           <ul className="space-y-3">
-            {today.blocks.map((b, i) => (
+            {today.blocks.map((b, i) => {
+              const completed = taskCompletions.some((item) => item.task_key === taskCompletionKey(today.day, b.task));
+              return (
               <li
                 key={i}
-                className="flex items-center gap-4 p-3 rounded-lg bg-background/40 border border-border/60"
+                className={`flex items-center gap-4 p-3 rounded-lg border ${completed ? "bg-muted/20 border-success/30" : "bg-background/40 border-border/60"}`}
               >
                 <div className="h-10 w-10 rounded-lg bg-primary/10 border border-primary/30 flex items-center justify-center">
                   <Clock className="h-4 w-4 text-primary" />
                 </div>
                 <div className="flex-1">
-                  <div className="text-sm font-medium">{b.task}</div>
+                  <div className={`text-sm font-medium ${completed ? "line-through text-muted-foreground" : ""}`}>{b.task}</div>
                   <div className="text-xs text-muted-foreground mt-0.5">
                     {b.duration} min focused block
                   </div>
@@ -112,10 +116,10 @@ const Dashboard = () => {
                     to={routeForTask(b.task, today.focus, today.day)}
                   className="text-xs px-3 py-1.5 rounded-md bg-primary/15 text-primary-glow border border-primary/30 hover:bg-primary/25 transition-colors"
                 >
-                  Start
+                  {completed ? "Redo" : "Start"}
                 </Link>
               </li>
-            ))}
+            );})}
           </ul>
         </GlassCard>
 
