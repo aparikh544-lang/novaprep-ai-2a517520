@@ -97,7 +97,7 @@ const Dashboard = () => {
           </div>
           <ul className="space-y-3">
             {today.blocks.map((b, i) => {
-              const completed = taskCompletions.some((item) => item.task_key === taskCompletionKey(today.day, b.task));
+              const completed = taskCompletions.some((item) => item.task_key === taskCompletionKey(today.day, b.task) || item.task_label === b.task);
               return (
               <li
                 key={i}
