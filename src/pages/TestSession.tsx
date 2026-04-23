@@ -64,10 +64,8 @@ const TestSession = () => {
   const cleanExplanation = (text: string) =>
     text
       .replace(/<think>[\s\S]*?<\/think>/gi, "")
-      .replace(/(^|
-)\s*(reasoning|chain of thought|internal thinking)\s*:[\s\S]*/gi, "")
-      .replace(/\n/g, "
-")
+      .replace(/(^|\n)\s*(reasoning|chain of thought|internal thinking)\s*:[\s\S]*/gi, "")
+      .replace(/\\n/g, "\n")
       .trim();
 
   const stampTime = () => {
