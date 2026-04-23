@@ -164,8 +164,8 @@ const TestSession = () => {
     } else {
       const sourceMistakeId = q.id.startsWith("redo:") ? q.id.split(":")[1] : null;
       if (sourceMistakeId) await resolveMistake(sourceMistakeId);
-      await awardXP(q.difficulty);
-      setXpEarned((x) => x + (q.difficulty === "hard" ? 25 : q.difficulty === "medium" ? 15 : 8));
+      const gained = await awardXP(q.difficulty);
+      setXpEarned((x) => x + gained);
     }
   };
 
