@@ -4,6 +4,7 @@
 export type Difficulty = "easy" | "medium" | "hard";
 export type ErrorReason = "Concept Gap" | "Time Pressure" | "Misreading";
 export type Section = "Math" | "Reading & Writing";
+export type ResponseType = "multiple-choice" | "spr";
 
 export interface Question {
   id: string;
@@ -14,6 +15,8 @@ export interface Question {
   passage?: string;
   choices: string[];
   correct: number;
+  correctText?: string;
+  responseType?: ResponseType;
   explanation: string;
 }
 
@@ -58,6 +61,8 @@ export function rankFromXP(xp: number) {
         level,
         levelInRank,
         levelsInRank: span,
+        startLevel,
+        endLevel,
       };
     }
     cumulative += span;
@@ -71,6 +76,8 @@ export function rankFromXP(xp: number) {
     level,
     levelInRank: 1,
     levelsInRank: 1,
+    startLevel: 1,
+    endLevel: 1,
   };
 }
 
