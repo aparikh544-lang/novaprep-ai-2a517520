@@ -62,6 +62,7 @@ interface NovaState {
   mysteryBoxes: MysteryBox[];
   loading: boolean;
   loadAll: (userId: string) => Promise<void>;
+  updateProfile: (patch: Partial<Pick<Profile, "display_name" | "target_score" | "test_date">>) => Promise<void>;
   markTaskComplete: (task: { taskKey: string; taskLabel: string; dayLabel: string }) => Promise<void>;
   syncBoxes: () => Promise<void>;
   upgradeMysteryBox: (boxId: string) => Promise<MysteryBox | null>;
@@ -133,6 +134,13 @@ export const useNova = create<NovaState>((set, get) => ({
     });
 
     if (profileRes.data) await get().syncBoxes();
+  },
+
+  updateProfile: async (patch) => {
+    const profile = get().profile;
+    if (!profile) return;
+    const { data } = await supabase.from("profiles").update(patch).eq("id", profile.id).select().single();
+    if (data) set({ profile: data as Profile });
   },
 
   markTaskComplete: async ({ taskKey, taskLabel, dayLabel }) => {
