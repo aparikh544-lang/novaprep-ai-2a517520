@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { AppLayout } from "@/components/AppLayout";
 import { GlassCard } from "@/components/GlassCard";
 import { useNova } from "@/lib/novaprep-store";
+import { coachArticles } from "./CoachArticle";
 
 const AICoach = () => {
   const mistakes = useNova((s) => s.mistakes);
@@ -15,27 +16,24 @@ const AICoach = () => {
     const ranked = [...counts.entries()].sort((a, b) => b[1] - a[1]);
 
     if (ranked.length === 0) {
-      return [
-        {
-          topic: "SAT Strategy 101",
-          summary: "Pacing, triage, and how to avoid the most common time-traps on Module 1.",
-          duration: "10 min",
-          badge: "Start here",
-        },
-        {
-          topic: "Reading: 75-Second Discipline",
-          summary: "How to triage easy/medium/hard questions on a paced module without burning your time bank.",
-          duration: "8 min",
-        },
-      ];
+      return coachArticles.map((article, index) => ({
+        topic: article.title,
+        summary: article.summary,
+        duration: article.duration,
+        badge: index === 0 ? "Start here" : undefined,
+        articleSlug: article.slug,
+      }));
     }
 
-    return ranked.slice(0, 6).map(([topic, count], i) => ({
+    return [
+      ...ranked.slice(0, 4).map(([topic, count], i) => ({
       topic,
       summary: `You missed ${count} ${count === 1 ? "question" : "questions"} on this topic. The Coach will walk through the underlying concept and reasoning patterns.`,
       duration: `${8 + Math.min(8, count * 2)} min`,
       badge: i === 0 ? "Recommended" : undefined,
-    }));
+    })),
+      ...coachArticles.slice(0, 3).map((article) => ({ topic: article.title, summary: article.summary, duration: article.duration, articleSlug: article.slug })),
+    ];
   }, [mistakes]);
 
   const dominantReason = useMemo(() => {
@@ -85,7 +83,7 @@ const AICoach = () => {
 
       <div className="grid md:grid-cols-2 gap-4">
         {lessons.map((l, i) => (
-          <Link key={i} to={`/test/redemption?topic=${encodeURIComponent(l.topic)}`} className="block">
+          <Link key={i} to={l.articleSlug ? `/coach/${l.articleSlug}` : `/test/redemption?topic=${encodeURIComponent(l.topic)}`} className="block">
           <GlassCard className="group cursor-pointer hover:scale-[1.01] transition-transform h-full">
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-2 text-secondary text-xs">
@@ -101,7 +99,7 @@ const AICoach = () => {
             <h3 className="font-display text-lg font-semibold mt-3">{l.topic}</h3>
             <p className="text-sm text-muted-foreground mt-2">{l.summary}</p>
             <div className="mt-4 flex items-center gap-1 text-sm text-secondary group-hover:text-secondary-glow">
-              Begin lesson <ChevronRight className="h-4 w-4" />
+              {l.articleSlug ? "Read article" : "Begin lesson"} <ChevronRight className="h-4 w-4" />
             </div>
           </GlassCard>
           </Link>

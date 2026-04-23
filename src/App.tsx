@@ -17,6 +17,7 @@ import TestSession from "./pages/TestSession.tsx";
 import Auth from "./pages/Auth.tsx";
 import Profile from "./pages/Profile.tsx";
 import Boxes from "./pages/Boxes.tsx";
+import CoachArticle from "./pages/CoachArticle.tsx";
 
 const queryClient = new QueryClient();
 
@@ -34,6 +35,7 @@ const App = () => (
             <Route path="/practice" element={<RequireAuth><Practice /></RequireAuth>} />
             <Route path="/plan" element={<RequireAuth><DailyPlan /></RequireAuth>} />
             <Route path="/coach" element={<RequireAuth><AICoach /></RequireAuth>} />
+            <Route path="/coach/:slug" element={<RequireAuth><CoachArticle /></RequireAuth>} />
             <Route path="/mistakes" element={<RequireAuth><MistakeBank /></RequireAuth>} />
             <Route path="/analytics" element={<RequireAuth><Analytics /></RequireAuth>} />
             <Route path="/profile" element={<RequireAuth><Profile /></RequireAuth>} />
