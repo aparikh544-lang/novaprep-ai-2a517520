@@ -6,10 +6,12 @@ import { GlassCard } from "@/components/GlassCard";
 import { useNova } from "@/lib/novaprep-store";
 import { coachArticles } from "./CoachArticle";
 
+type CoachLesson = { topic: string; summary: string; duration: string; badge?: string; articleSlug?: string };
+
 const AICoach = () => {
   const mistakes = useNova((s) => s.mistakes);
 
-  const lessons = useMemo(() => {
+  const lessons = useMemo<CoachLesson[]>(() => {
     // Build lesson list from real weak topics; recommend the topic with the most mistakes.
     const counts = new Map<string, number>();
     for (const m of mistakes) counts.set(m.topic, (counts.get(m.topic) ?? 0) + 1);
