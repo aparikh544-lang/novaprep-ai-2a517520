@@ -75,11 +75,12 @@ const TestSession = () => {
         })));
       } else {
         const fullSection = targetModule === 1 ? "Reading & Writing" : "Math";
+        const modeTopic = requestedTopic && requestedTopic !== "Mixed SAT Skills" ? requestedTopic : undefined;
         const qs = await generateQuestions({
           mode: m === "review" ? "redemption" : m,
           count: m === "full" ? (targetModule === 1 ? 54 : 44) : MODULE_SIZE[m],
           difficultyBias: bias,
-          topic: m === "redemption" ? weakTopic : requestedTopic,
+          topic: m === "redemption" ? weakTopic : modeTopic,
           section: m === "full" ? fullSection : undefined,
         });
         setQuestions(qs.map((question) => ({ ...question, explanation: cleanExplanation(question.explanation) })));

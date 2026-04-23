@@ -243,12 +243,12 @@ export const useNova = create<NovaState>((set, get) => ({
 
     const [{ data: updatedBox, error }, { data: updatedProfile }] = await Promise.all([
       supabase
-        .from("mystery_boxes")
-        .update({ reward_payload: reward, opened_at: new Date().toISOString(), claimed_at: new Date().toISOString() })
+      .from("mystery_boxes")
+      .update({ reward_payload: reward, opened_at: new Date().toISOString(), claimed_at: new Date().toISOString() } as any)
         .eq("id", boxId)
         .select("id,level_number,tier,upgrade_clicks_used,reward_label,opened_at,claimed_at,reward_payload,created_at,updated_at")
         .single(),
-      supabase.from("profiles").update(patch).eq("id", profile.id).select().single(),
+      supabase.from("profiles").update(patch as any).eq("id", profile.id).select().single(),
     ]);
 
     if (!error && updatedBox) {

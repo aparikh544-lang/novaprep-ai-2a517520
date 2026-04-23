@@ -50,8 +50,9 @@ const DailyPlan = () => {
         {plan.map((day, i) => {
           const meta = focusMeta[day.focus];
           const Icon = meta.icon;
+          const locked = i > 0;
           return (
-            <GlassCard key={i} className="!p-5">
+            <GlassCard key={i} className={`!p-5 ${locked ? "opacity-55" : ""}`}>
               <div className="flex flex-col md:flex-row md:items-center gap-4 md:gap-6">
                 <div className="md:w-44">
                   <div className="flex items-center gap-2 text-xs uppercase tracking-widest text-muted-foreground">
@@ -74,11 +75,14 @@ const DailyPlan = () => {
                     return (
                       <Link
                         key={j}
-                        to={routeForTask(b.task, day.focus, day.day)}
-                        className={`p-3 rounded-lg border transition-colors ${completed ? "bg-muted/25 border-success/30" : "bg-background/40 border-border/60 hover:border-secondary/50 hover:bg-muted/40"}`}
+                        to={locked ? "/plan" : routeForTask(b.task, day.focus, day.day)}
+                        onClick={(event) => locked && event.preventDefault()}
+                        aria-disabled={locked}
+                        className={`p-3 rounded-lg border transition-colors ${locked ? "cursor-not-allowed bg-muted/10 border-border/40" : completed ? "bg-muted/25 border-success/30" : "bg-background/40 border-border/60 hover:border-secondary/50 hover:bg-muted/40"}`}
                       >
                         <div className="text-[11px] font-mono text-secondary">{b.duration} MIN</div>
-                        <div className={`text-sm mt-1 font-medium leading-snug ${completed ? "line-through text-muted-foreground" : ""}`}>{b.task}</div>
+                        <div className={`text-sm mt-1 font-medium leading-snug ${completed ? "line-through text-muted-foreground" : locked ? "text-muted-foreground" : ""}`}>{b.task}</div>
+                        {locked && <div className="mt-2 text-[10px] uppercase tracking-widest text-muted-foreground">Unlocks later</div>}
                       </Link>
                     );
                   })}
