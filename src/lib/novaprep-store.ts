@@ -96,6 +96,14 @@ const dedupeMistakes = (mistakes: MistakeRecord[]) =>
     ).values(),
   );
 
+const rewardForTier = (tier: MysteryBox["tier"]): BoxReward => {
+  const roll = Math.random();
+  if (tier === "common") return roll < 0.5 ? { type: "sp", amount: 5, label: "5 SP" } : { type: "xp_boost", multiplier: 2, minutes: 10, label: "2x XP · 10 min" };
+  if (tier === "rare") return roll < 0.45 ? { type: "sp", amount: 10, label: "10 SP" } : roll < 0.9 ? { type: "xp_boost", multiplier: 2, minutes: 20, label: "2x XP · 20 min" } : { type: "sp", amount: 20, label: "20 SP" };
+  if (tier === "epic") return roll < 0.45 ? { type: "sp", amount: 20, label: "20 SP" } : roll < 0.9 ? { type: "xp_boost", multiplier: 2, minutes: 30, label: "2x XP · 30 min" } : { type: "sp", amount: 40, label: "40 SP" };
+  return roll < 0.5 ? { type: "sp", amount: 40, label: "40 SP" } : { type: "xp_boost", multiplier: 2, minutes: 60, label: "2x XP · 1 hr" };
+};
+
 export const useNova = create<NovaState>((set, get) => ({
   profile: null,
   mistakes: [],
@@ -112,7 +120,7 @@ export const useNova = create<NovaState>((set, get) => ({
       supabase.from("mistakes").select("*").eq("user_id", userId).order("created_at", { ascending: false }).limit(200),
       supabase.from("sessions").select("id,created_at,score,total,duration_seconds,mode,xp_earned").eq("user_id", userId).order("created_at", { ascending: false }).limit(100),
       supabase.from("task_completions").select("id,task_key,task_label,day_label,completed_on").eq("user_id", userId).eq("completed_on", today),
-      supabase.from("mystery_boxes").select("id,level_number,tier,upgrade_clicks_used,reward_label,opened_at,claimed_at,created_at,updated_at").eq("user_id", userId).order("level_number", { ascending: false }),
+      supabase.from("mystery_boxes").select("id,level_number,tier,upgrade_clicks_used,reward_label,opened_at,claimed_at,reward_payload,created_at,updated_at").eq("user_id", userId).order("level_number", { ascending: false }),
     ]);
 
     set({
@@ -178,7 +186,7 @@ export const useNova = create<NovaState>((set, get) => ({
 
     const { data } = await supabase
       .from("mystery_boxes")
-      .select("id,level_number,tier,upgrade_clicks_used,reward_label,opened_at,claimed_at,created_at,updated_at")
+      .select("id,level_number,tier,upgrade_clicks_used,reward_label,opened_at,claimed_at,reward_payload,created_at,updated_at")
       .eq("user_id", profile.id)
       .order("level_number", { ascending: false });
 
@@ -200,10 +208,9 @@ export const useNova = create<NovaState>((set, get) => ({
       .update({
         tier: nextTier,
         upgrade_clicks_used: box.upgrade_clicks_used + 1,
-        opened_at: box.opened_at ?? new Date().toISOString(),
       })
       .eq("id", boxId)
-      .select("id,level_number,tier,upgrade_clicks_used,reward_label,opened_at,claimed_at,created_at,updated_at")
+      .select("id,level_number,tier,upgrade_clicks_used,reward_label,opened_at,claimed_at,reward_payload,created_at,updated_at")
       .single();
 
     if (!error && data) {
