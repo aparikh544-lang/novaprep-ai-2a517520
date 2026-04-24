@@ -76,7 +76,22 @@ const Analytics = () => {
       <div className="grid lg:grid-cols-3 gap-5">
         <GlassCard variant="cyan" className="lg:col-span-2">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="font-display text-xl font-semibold">Projected Score</h2>
+            <div>
+              <h2 className="font-display text-xl font-semibold">Projected Score</h2>
+              <p className="text-xs text-muted-foreground mt-1">
+                Range <span className="font-mono text-secondary">{stats.projectedRange}</span> · central{" "}
+                <span className="font-mono">{stats.projectedScore}</span> · reliability{" "}
+                <span className="font-mono">{Math.round(stats.reliability * 100)}%</span>
+              </p>
+              <div className="flex gap-3 mt-2 text-[11px] font-mono text-muted-foreground">
+                {stats.sectionPredictions.map((s) => (
+                  <span key={s.section}>
+                    {s.section === "Math" ? "M" : "RW"}: {s.low}–{s.high}
+                    {s.cappedByModule2 ? " ⓘ easy mod" : ""}
+                  </span>
+                ))}
+              </div>
+            </div>
             <span className="text-xs text-success font-mono">{sessions.length} sessions</span>
           </div>
           <div className="h-64">
