@@ -5,16 +5,18 @@ import {
   Flame,
   Brain,
   Clock,
-  Bookmark,
+  TrendingDown,
   TrendingUp,
 } from "lucide-react";
 import { AppLayout } from "@/components/AppLayout";
 import { GlassCard } from "@/components/GlassCard";
 import { useNova } from "@/lib/novaprep-store";
 import { rankFromXP } from "@/lib/novaprep-data";
-import { buildFlightPlan } from "@/lib/flight-plan";
-import { routeForTask } from "@/lib/practice-links";
-import { taskCompletionKey } from "@/lib/practice-links";
+import {
+  buildDailyRoutine,
+  dailyTaskKey,
+  routeForDailyTask,
+} from "@/lib/daily-recommendations";
 import { deriveNovaStats } from "@/lib/novaprep-stats";
 
 const Dashboard = () => {
@@ -25,9 +27,11 @@ const Dashboard = () => {
   const xp = profile?.xp ?? 0;
   const streak = profile?.streak ?? 0;
   const info = rankFromXP(xp);
-  const plan = useMemo(() => buildFlightPlan(mistakes), [mistakes]);
-  const today = plan[0];
-  const stats = useMemo(() => deriveNovaStats(sessions, mistakes, xp, profile?.target_score), [sessions, mistakes, xp, profile?.target_score]);
+  const routine = useMemo(() => buildDailyRoutine(mistakes, sessions), [mistakes, sessions]);
+  const stats = useMemo(
+    () => deriveNovaStats(sessions, mistakes, xp, profile?.target_score),
+    [sessions, mistakes, xp, profile?.target_score],
+  );
 
   const projected = stats.projectedScore;
   const targetSuffix = profile?.target_score ? ` / ${profile.target_score}` : "";
@@ -43,8 +47,7 @@ const Dashboard = () => {
           </span>
         </h1>
         <p className="text-muted-foreground max-w-xl">
-          Your Flight Plan is calibrated. Today's focus is{" "}
-          <span className="text-secondary font-medium">{today.focus}</span>.
+          Today's focus is <span className="text-secondary font-medium">{routine.focus}</span>.
         </p>
       </div>
 
@@ -65,10 +68,12 @@ const Dashboard = () => {
         </GlassCard>
         <GlassCard className="!p-5">
           <div className="flex items-center gap-2 text-xs uppercase tracking-widest text-muted-foreground">
-            <Bookmark className="h-3.5 w-3.5 text-secondary" />
-            Mistake Bank
+            <TrendingDown className="h-3.5 w-3.5 text-secondary" />
+            Weak Areas
           </div>
-          <div className="mt-2 font-display text-3xl font-bold">{mistakes.length}</div>
+          <div className="mt-2 font-display text-3xl font-bold">
+            {new Set(mistakes.map((m) => m.topic)).size}
+          </div>
         </GlassCard>
         <GlassCard className="!p-5">
           <div className="flex items-center gap-2 text-xs uppercase tracking-widest text-muted-foreground">
@@ -86,40 +91,49 @@ const Dashboard = () => {
               <span className="text-xs uppercase tracking-widest text-muted-foreground">
                 Today's Routine
               </span>
-              <h2 className="font-display text-2xl font-semibold mt-1">{today.focus}</h2>
+              <h2 className="font-display text-2xl font-semibold mt-1">{routine.headline}</h2>
             </div>
             <Link
               to="/plan"
-              className="text-xs text-secondary hover:text-secondary-glow inline-flex items-center gap-1"
+              className="text-xs text-secondary hover:text-secondary-glow inline-flex items-center gap-1 shrink-0"
             >
               Full plan <ArrowRight className="h-3 w-3" />
             </Link>
           </div>
           <ul className="space-y-3">
-            {today.blocks.map((b, i) => {
-              const completed = taskCompletions.some((item) => item.task_key === taskCompletionKey(today.day, b.task) || item.task_label === b.task);
+            {routine.tasks.map((t, i) => {
+              const completed = taskCompletions.some(
+                (c) => c.task_key === dailyTaskKey(t) || c.task_label === t.task,
+              );
               return (
-              <li
-                key={i}
-                className={`flex items-center gap-4 p-3 rounded-lg border ${completed ? "bg-muted/20 border-success/30" : "bg-background/40 border-border/60"}`}
-              >
-                <div className="h-10 w-10 rounded-lg bg-primary/10 border border-primary/30 flex items-center justify-center">
-                  <Clock className="h-4 w-4 text-primary" />
-                </div>
-                <div className="flex-1">
-                  <div className={`text-sm font-medium ${completed ? "line-through text-muted-foreground" : ""}`}>{b.task}</div>
-                  <div className="text-xs text-muted-foreground mt-0.5">
-                    {b.duration} min focused block
-                  </div>
-                </div>
-                  <Link
-                    to={routeForTask(b.task, today.focus, today.day)}
-                  className="text-xs px-3 py-1.5 rounded-md bg-primary/15 text-primary-glow border border-primary/30 hover:bg-primary/25 transition-colors"
+                <li
+                  key={i}
+                  className={`flex items-center gap-4 p-3 rounded-lg border ${
+                    completed ? "bg-muted/20 border-success/30" : "bg-background/40 border-border/60"
+                  }`}
                 >
-                  {completed ? "Redo" : "Start"}
-                </Link>
-              </li>
-            );})}
+                  <div className="h-10 w-10 rounded-lg bg-primary/10 border border-primary/30 flex items-center justify-center shrink-0">
+                    <Clock className="h-4 w-4 text-primary" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div
+                      className={`text-sm font-medium ${completed ? "line-through text-muted-foreground" : ""}`}
+                    >
+                      {t.task}
+                    </div>
+                    <div className="text-xs text-muted-foreground mt-0.5">
+                      {t.duration} min · {t.section}
+                    </div>
+                  </div>
+                  <Link
+                    to={routeForDailyTask(t)}
+                    className="text-xs px-3 py-1.5 rounded-md bg-primary/15 text-primary-glow border border-primary/30 hover:bg-primary/25 transition-colors shrink-0"
+                  >
+                    {completed ? "Redo" : "Start"}
+                  </Link>
+                </li>
+              );
+            })}
           </ul>
         </GlassCard>
 
