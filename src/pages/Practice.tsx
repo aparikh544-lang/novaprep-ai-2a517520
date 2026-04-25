@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { Target, Zap, BookOpen, Calculator, Trophy } from "lucide-react";
+import { Target, Zap, BookOpen, Calculator } from "lucide-react";
 import { AppLayout } from "@/components/AppLayout";
 import { GlassCard } from "@/components/GlassCard";
 import { useNova } from "@/lib/novaprep-store";
