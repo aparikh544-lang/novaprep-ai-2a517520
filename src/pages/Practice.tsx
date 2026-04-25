@@ -42,19 +42,10 @@ const Practice = () => {
       id: "redemption",
       icon: Zap,
       title: "Weak-Skill Arena",
-      desc: `Fresh AI-generated questions tuned to ${weakTopic}; use Mistake Bank Review only when you want to clear saved misses.`,
+      desc: `Fresh AI-generated questions tuned to ${weakTopic}. Pure practice — no replays.`,
       cta: "Enter Arena",
       duration: "8 min",
       route: `/test/redemption?topic=${encodeURIComponent(weakTopic)}`,
-    },
-    {
-      id: "review",
-      icon: Trophy,
-      title: "Vault Review",
-      desc: "Re-answer saved mistakes. Correct answers remove those questions from your Mistake Bank.",
-      cta: "Clear Mistakes",
-      duration: "15 min",
-      route: "/test/review",
     },
   ];
 
