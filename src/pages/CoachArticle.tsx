@@ -89,9 +89,15 @@ export default function CoachArticle() {
             <section key={section.heading} className="border-l border-secondary/30 pl-5 py-2">
               <div className="flex items-center gap-2 text-xs uppercase tracking-widest text-secondary"><CheckCircle2 className="h-4 w-4" /> Part {index + 1}</div>
               <h2 className="font-display text-2xl font-semibold mt-2">{section.heading}</h2>
-              <p className="mt-3 text-base leading-8 text-foreground/85">{section.body}</p>
+              <p className="mt-3 text-base leading-8 text-foreground/85 whitespace-pre-line">{section.body}</p>
             </section>
           ))}
+          <section className="border-l border-secondary/30 pl-5 py-2">
+            <div className="flex items-center gap-2 text-xs uppercase tracking-widest text-secondary"><CheckCircle2 className="h-4 w-4" /> Practical drill</div>
+            <h2 className="font-display text-2xl font-semibold mt-2">Apply it this week</h2>
+            <p className="mt-3 text-base leading-8 text-foreground/85">Pick one habit from this article and run it through three short practice sets in the next 48 hours. After each set, write a single line answering: did this routine save me time, save me points, or both? If neither, swap it for a different routine and test that one. The point is not to memorize advice; it is to install one repeatable behavior at a time. Most score jumps come from three or four installed habits, not from learning every tip at once.</p>
+            <p className="mt-3 text-base leading-8 text-foreground/85">If a habit feels awkward at first, that means it has not been automated yet. Give it a full week of timed practice before deciding whether it works for you. Track your accuracy and pacing inside NovaPrep so you can see whether the routine is producing measurable change. Real preparation is small, deliberate, and repeated — exactly the opposite of cramming the night before. The students who improve most are the ones who turn advice into routine, then routine into instinct.</p>
+          </section>
         </div>
       </article>
     </AppLayout>
