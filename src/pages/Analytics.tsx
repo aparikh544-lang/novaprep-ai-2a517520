@@ -159,7 +159,7 @@ const Analytics = () => {
 
         <GlassCard className="lg:col-span-3">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="font-display text-xl font-semibold">Avg Time on Missed Questions</h2>
+            <h2 className="font-display text-xl font-semibold">Avg Time on Weak-Area Questions</h2>
             <span className="text-xs text-muted-foreground">target ≤ 75s</span>
           </div>
           {paceData.length === 0 ? (
