@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Award, CalendarDays, Flame, Medal, ShieldCheck, Star, Target, Trophy, UserCircle, Zap, Gem, Clock3, BookOpenCheck, Crown } from "lucide-react";
+import { Award, CalendarDays, Flame, Medal, ShieldCheck, Star, Target, Trophy, UserCircle, Zap, Gem, Clock3, BookOpenCheck, Crown, Timer, Backpack, Sparkles, Snowflake, Rocket, Brain, TrendingUp } from "lucide-react";
 import { AppLayout } from "@/components/AppLayout";
 import { GlassCard } from "@/components/GlassCard";
 import { useNova } from "@/lib/novaprep-store";
@@ -9,20 +9,40 @@ import { deriveNovaStats } from "@/lib/novaprep-stats";
 import { toast } from "@/hooks/use-toast";
 
 const badgeCatalog = [
+  // Practice volume
   { name: "First Launch", icon: ShieldCheck, test: (s: any) => s.sessions >= 1, detail: "Complete 1 session" },
+  { name: "Consistency Core", icon: Flame, test: (s: any) => s.sessions >= 5, detail: "Complete 5 sessions" },
+  { name: "Iron Schedule", icon: CalendarDays, test: (s: any) => s.sessions >= 20, detail: "Complete 20 sessions" },
+  { name: "Marathon Mind", icon: Clock3, test: (s: any) => s.hours >= 5, detail: "Log 5 hours of practice" },
+  { name: "Endurance Pilot", icon: Rocket, test: (s: any) => s.hours >= 20, detail: "Log 20 hours of practice" },
+  // Accuracy / performance
   { name: "Accuracy Ace", icon: Target, test: (s: any) => s.accuracy >= 80, detail: "Reach 80% lifetime accuracy" },
-  { name: "Perfect Drill", icon: Star, test: (s: any) => s.bestAccuracy === 100, detail: "Score 100% once" },
-  { name: "Vault Cleaner", icon: BookOpenCheck, test: (s: any) => s.mistakes === 0 && s.sessions > 0, detail: "Clear all mistakes" },
+  { name: "Sharpshooter", icon: Target, test: (s: any) => s.accuracy >= 90, detail: "Reach 90% lifetime accuracy" },
+  { name: "Perfect Drill", icon: Star, test: (s: any) => s.bestAccuracy === 100, detail: "Score 100% on a session" },
+  { name: "Pace Breaker", icon: Clock3, test: (s: any) => s.avgPace > 0 && s.avgPace <= 75, detail: "Average 75 seconds per question or faster" },
+  { name: "Score Climber", icon: TrendingUp, test: (s: any) => s.projected >= 1300, detail: "Hit a 1300+ projected score" },
+  { name: "Elite Trajectory", icon: Crown, test: (s: any) => s.projected >= 1500, detail: "Hit a 1500+ projected score" },
+  // Streak
   { name: "Hot Streak", icon: Flame, test: (s: any) => s.streak >= 3, detail: "Hold a 3-day streak" },
+  { name: "Wildfire", icon: Flame, test: (s: any) => s.streak >= 7, detail: "Hold a 7-day streak" },
+  { name: "Unbroken", icon: Snowflake, test: (s: any) => s.streak >= 14, detail: "Hold a 14-day streak" },
+  // Focus
+  { name: "Deep Worker", icon: Timer, test: (s: any) => s.focusMinutes >= 60, detail: "Log 60 focused minutes" },
+  { name: "Flow State", icon: Sparkles, test: (s: any) => s.focusMinutes >= 300, detail: "Log 5 hours in Focus mode" },
+  // Currency / inventory
+  { name: "SP Collector", icon: Gem, test: (s: any) => s.sp >= 50, detail: "Hold 50 SP at once" },
+  { name: "SP Tycoon", icon: Gem, test: (s: any) => s.sp >= 250, detail: "Hold 250 SP at once" },
+  { name: "Quartermaster", icon: Backpack, test: (s: any) => s.inventory >= 5, detail: "Stockpile 5 inventory items" },
+  // Weak areas
+  { name: "Vault Cleaner", icon: BookOpenCheck, test: (s: any) => s.mistakes === 0 && s.sessions > 0, detail: "Clear all weak areas" },
+  // XP / level
   { name: "XP Pilot", icon: Zap, test: (s: any) => s.xp >= 2500, detail: "Earn 2,500 XP" },
-  { name: "SP Collector", icon: Gem, test: (s: any) => s.sp >= 50, detail: "Collect 50 SP" },
-  { name: "Marathon Mind", icon: Clock3, test: (s: any) => s.hours >= 5, detail: "Log 5 hours" },
+  { name: "XP Veteran", icon: Brain, test: (s: any) => s.xp >= 10000, detail: "Earn 10,000 XP" },
   { name: "Rank Climber", icon: Medal, test: (s: any) => s.level >= 10, detail: "Reach level 10" },
   { name: "Commander Track", icon: Crown, test: (s: any) => s.level >= 30, detail: "Reach level 30" },
+  // Setup
   { name: "Early Bird", icon: CalendarDays, test: (s: any) => Boolean(s.testDate), detail: "Set a test date" },
-  { name: "Goal Setter", icon: Target, test: (s: any) => Boolean(s.targetScore), detail: "Set a target score" },
-  { name: "Pace Breaker", icon: Clock3, test: (s: any) => s.avgPace > 0 && s.avgPace <= 75, detail: "Average 75 seconds or faster" },
-  { name: "Consistency Core", icon: Flame, test: (s: any) => s.sessions >= 5, detail: "Complete 5 sessions" },
+  { name: "Goal Setter", icon: Award, test: (s: any) => Boolean(s.targetScore), detail: "Set a target score" },
 ];
 
 const Profile = () => {
