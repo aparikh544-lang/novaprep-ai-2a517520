@@ -1,4 +1,4 @@
-import { DayFocus } from "./flight-plan";
+export type DayFocus = "Concept Fix" | "Time Management" | "Redemption" | "Maintenance";
 
 export function cleanPracticeTopic(task: string) {
   return task
