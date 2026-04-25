@@ -117,9 +117,12 @@ export type Database = {
       }
       profiles: {
         Row: {
+          active_boosts: Json
           created_at: string
           display_name: string | null
+          focus_minutes_total: number
           id: string
+          inventory: Json
           sp: number
           streak: number
           target_score: number | null
@@ -129,9 +132,12 @@ export type Database = {
           xp_boost_until: string | null
         }
         Insert: {
+          active_boosts?: Json
           created_at?: string
           display_name?: string | null
+          focus_minutes_total?: number
           id: string
+          inventory?: Json
           sp?: number
           streak?: number
           target_score?: number | null
@@ -141,9 +147,12 @@ export type Database = {
           xp_boost_until?: string | null
         }
         Update: {
+          active_boosts?: Json
           created_at?: string
           display_name?: string | null
+          focus_minutes_total?: number
           id?: string
+          inventory?: Json
           sp?: number
           streak?: number
           target_score?: number | null
