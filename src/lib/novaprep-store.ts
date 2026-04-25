@@ -8,6 +8,23 @@ import {
   xpForDifficulty,
 } from "./novaprep-data";
 
+export type BoostKind = "xp_2x" | "xp_3x" | "sp_2x" | "streak_freeze" | "skip_token";
+
+export interface InventoryItem {
+  id: string; // uuid in JS
+  kind: BoostKind;
+  label: string;
+  minutes?: number; // for timed boosts
+  acquired_at: string;
+}
+
+export interface ActiveBoost {
+  id: string;
+  kind: BoostKind;
+  label: string;
+  expires_at: string;
+}
+
 interface Profile {
   id: string;
   display_name: string | null;
@@ -15,8 +32,11 @@ interface Profile {
   test_date: string | null;
   xp: number;
   streak: number;
-  sp?: number;
-  xp_boost_until?: string | null;
+  sp: number;
+  xp_boost_until?: string | null; // legacy, kept for back-compat
+  inventory: InventoryItem[];
+  active_boosts: ActiveBoost[];
+  focus_minutes_total: number;
 }
 
 export type BoxReward =
@@ -54,6 +74,15 @@ export interface MysteryBox {
   updated_at: string;
 }
 
+export interface StoreItem {
+  id: string;
+  kind: BoostKind;
+  label: string;
+  description: string;
+  cost: number;
+  minutes?: number;
+}
+
 interface NovaState {
   profile: Profile | null;
   mistakes: MistakeRecord[];
@@ -67,7 +96,10 @@ interface NovaState {
   syncBoxes: () => Promise<void>;
   upgradeMysteryBox: (boxId: string) => Promise<MysteryBox | null>;
   openMysteryBox: (boxId: string) => Promise<BoxReward | null>;
-  buyXPBoost: () => Promise<boolean>;
+  buyStoreItem: (item: StoreItem) => Promise<boolean>;
+  activateInventoryItem: (itemId: string) => Promise<boolean>;
+  pruneExpiredBoosts: () => Promise<void>;
+  awardFocusXP: (minutes: number) => Promise<number>;
   recordMistake: (m: {
     question: Question;
     userChoice: number;
@@ -87,6 +119,8 @@ interface NovaState {
 }
 
 const todayDate = () => new Date().toISOString().slice(0, 10);
+const uid = () =>
+  (globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`);
 
 const dedupeMistakes = (mistakes: MistakeRecord[]) =>
   Array.from(
@@ -98,12 +132,61 @@ const dedupeMistakes = (mistakes: MistakeRecord[]) =>
     ).values(),
   );
 
+const normalizeProfile = (raw: any): Profile | null => {
+  if (!raw) return null;
+  return {
+    ...raw,
+    inventory: Array.isArray(raw.inventory) ? (raw.inventory as InventoryItem[]) : [],
+    active_boosts: Array.isArray(raw.active_boosts) ? (raw.active_boosts as ActiveBoost[]) : [],
+    focus_minutes_total: raw.focus_minutes_total ?? 0,
+    sp: raw.sp ?? 0,
+  };
+};
+
+const filterLiveBoosts = (list: ActiveBoost[]) =>
+  list.filter((b) => new Date(b.expires_at).getTime() > Date.now());
+
+export const xpMultiplierFromBoosts = (boosts: ActiveBoost[]) => {
+  const live = filterLiveBoosts(boosts);
+  if (live.some((b) => b.kind === "xp_3x")) return 3;
+  if (live.some((b) => b.kind === "xp_2x")) return 2;
+  return 1;
+};
+
 const rewardForTier = (tier: MysteryBox["tier"]): BoxReward => {
   const roll = Math.random();
-  if (tier === "common") return roll < 0.5 ? { type: "sp", amount: 5, label: "5 SP" } : { type: "xp_boost", multiplier: 2, minutes: 10, label: "2x XP · 10 min" };
-  if (tier === "rare") return roll < 0.45 ? { type: "sp", amount: 10, label: "10 SP" } : roll < 0.9 ? { type: "xp_boost", multiplier: 2, minutes: 20, label: "2x XP · 20 min" } : { type: "sp", amount: 20, label: "20 SP" };
-  if (tier === "epic") return roll < 0.45 ? { type: "sp", amount: 20, label: "20 SP" } : roll < 0.9 ? { type: "xp_boost", multiplier: 2, minutes: 30, label: "2x XP · 30 min" } : { type: "sp", amount: 40, label: "40 SP" };
-  return roll < 0.5 ? { type: "sp", amount: 40, label: "40 SP" } : { type: "xp_boost", multiplier: 2, minutes: 60, label: "2x XP · 1 hr" };
+  if (tier === "common")
+    return roll < 0.5
+      ? { type: "sp", amount: 5, label: "5 SP" }
+      : { type: "xp_boost", multiplier: 2, minutes: 10, label: "2x XP · 10 min" };
+  if (tier === "rare")
+    return roll < 0.45
+      ? { type: "sp", amount: 10, label: "10 SP" }
+      : roll < 0.9
+        ? { type: "xp_boost", multiplier: 2, minutes: 20, label: "2x XP · 20 min" }
+        : { type: "sp", amount: 20, label: "20 SP" };
+  if (tier === "epic")
+    return roll < 0.45
+      ? { type: "sp", amount: 20, label: "20 SP" }
+      : roll < 0.9
+        ? { type: "xp_boost", multiplier: 2, minutes: 30, label: "2x XP · 30 min" }
+        : { type: "sp", amount: 40, label: "40 SP" };
+  return roll < 0.5
+    ? { type: "sp", amount: 40, label: "40 SP" }
+    : { type: "xp_boost", multiplier: 2, minutes: 60, label: "2x XP · 1 hr" };
+};
+
+const inventoryFromReward = (reward: BoxReward): InventoryItem | null => {
+  if (reward.type === "xp_boost") {
+    return {
+      id: uid(),
+      kind: "xp_2x",
+      label: reward.label,
+      minutes: reward.minutes,
+      acquired_at: new Date().toISOString(),
+    };
+  }
+  return null;
 };
 
 export const useNova = create<NovaState>((set, get) => ({
@@ -126,7 +209,7 @@ export const useNova = create<NovaState>((set, get) => ({
     ]);
 
     set({
-      profile: (profileRes.data as Profile | null) ?? null,
+      profile: normalizeProfile(profileRes.data),
       mistakes: dedupeMistakes(((mistakesRes.data as MistakeRecord[]) ?? [])),
       sessions: (sessionsRes.data as SessionSummary[]) ?? [],
       taskCompletions: (taskCompletionsRes.data as TaskCompletion[]) ?? [],
@@ -134,14 +217,17 @@ export const useNova = create<NovaState>((set, get) => ({
       loading: false,
     });
 
-    if (profileRes.data) await get().syncBoxes();
+    if (profileRes.data) {
+      await get().syncBoxes();
+      await get().pruneExpiredBoosts();
+    }
   },
 
   updateProfile: async (patch) => {
     const profile = get().profile;
     if (!profile) return;
     const { data } = await supabase.from("profiles").update(patch).eq("id", profile.id).select().single();
-    if (data) set({ profile: data as Profile });
+    if (data) set({ profile: normalizeProfile(data) });
   },
 
   markTaskComplete: async ({ taskKey, taskLabel, dayLabel }) => {
@@ -232,55 +318,132 @@ export const useNova = create<NovaState>((set, get) => ({
     return null;
   },
 
-  buyXPBoost: async () => {
-    const profile = get().profile;
-    if (!profile || (profile.sp ?? 0) < 25) return false;
-
-    const currentBoost = profile.xp_boost_until && new Date(profile.xp_boost_until).getTime() > Date.now()
-      ? new Date(profile.xp_boost_until).getTime()
-      : Date.now();
-    const { data } = await supabase
-      .from("profiles")
-      .update({ sp: (profile.sp ?? 0) - 25, xp_boost_until: new Date(currentBoost + 15 * 60_000).toISOString() } as any)
-      .eq("id", profile.id)
-      .select()
-      .single();
-
-    if (data) {
-      set({ profile: data as Profile });
-      return true;
-    }
-    return false;
-  },
-
   openMysteryBox: async (boxId) => {
     const profile = get().profile;
     const box = get().mysteryBoxes.find((entry) => entry.id === boxId);
     if (!profile || !box || box.reward_payload || box.claimed_at) return null;
 
     const reward = rewardForTier(box.tier);
-    const patch = reward.type === "sp"
-      ? { sp: (profile.sp ?? 0) + reward.amount }
-      : { xp_boost_until: new Date(Date.now() + reward.minutes * 60_000).toISOString() };
+    const inventoryItem = inventoryFromReward(reward);
+    const nextInventory = inventoryItem ? [...profile.inventory, inventoryItem] : profile.inventory;
+    const patch: any =
+      reward.type === "sp"
+        ? { sp: profile.sp + reward.amount }
+        : { inventory: nextInventory };
 
     const [{ data: updatedBox, error }, { data: updatedProfile }] = await Promise.all([
       supabase
-      .from("mystery_boxes")
-      .update({ reward_payload: reward, opened_at: new Date().toISOString(), claimed_at: new Date().toISOString() } as any)
+        .from("mystery_boxes")
+        .update({ reward_payload: reward, opened_at: new Date().toISOString(), claimed_at: new Date().toISOString() } as any)
         .eq("id", boxId)
         .select("id,level_number,tier,upgrade_clicks_used,reward_label,opened_at,claimed_at,reward_payload,created_at,updated_at")
         .single(),
-      supabase.from("profiles").update(patch as any).eq("id", profile.id).select().single(),
+      supabase.from("profiles").update(patch).eq("id", profile.id).select().single(),
     ]);
 
     if (!error && updatedBox) {
       set((state) => ({
-        profile: (updatedProfile as Profile) ?? state.profile,
+        profile: normalizeProfile(updatedProfile) ?? state.profile,
         mysteryBoxes: state.mysteryBoxes.map((entry) => (entry.id === boxId ? (updatedBox as MysteryBox) : entry)),
       }));
       return reward;
     }
     return null;
+  },
+
+  buyStoreItem: async (item) => {
+    const profile = get().profile;
+    if (!profile || profile.sp < item.cost) return false;
+    const inventoryItem: InventoryItem = {
+      id: uid(),
+      kind: item.kind,
+      label: item.label,
+      minutes: item.minutes,
+      acquired_at: new Date().toISOString(),
+    };
+    const { data } = await supabase
+      .from("profiles")
+      .update({ sp: profile.sp - item.cost, inventory: [...profile.inventory, inventoryItem] } as any)
+      .eq("id", profile.id)
+      .select()
+      .single();
+    if (data) {
+      set({ profile: normalizeProfile(data) });
+      return true;
+    }
+    return false;
+  },
+
+  activateInventoryItem: async (itemId) => {
+    const profile = get().profile;
+    if (!profile) return false;
+    const item = profile.inventory.find((i) => i.id === itemId);
+    if (!item) return false;
+
+    const liveBoosts = filterLiveBoosts(profile.active_boosts);
+    if (liveBoosts.length >= 3) return false;
+
+    let nextActive = liveBoosts;
+    if (item.minutes) {
+      nextActive = [
+        ...liveBoosts,
+        {
+          id: item.id,
+          kind: item.kind,
+          label: item.label,
+          expires_at: new Date(Date.now() + item.minutes * 60_000).toISOString(),
+        },
+      ];
+    }
+
+    const nextInventory = profile.inventory.filter((i) => i.id !== itemId);
+
+    const { data } = await supabase
+      .from("profiles")
+      .update({ inventory: nextInventory, active_boosts: nextActive } as any)
+      .eq("id", profile.id)
+      .select()
+      .single();
+    if (data) {
+      set({ profile: normalizeProfile(data) });
+      return true;
+    }
+    return false;
+  },
+
+  pruneExpiredBoosts: async () => {
+    const profile = get().profile;
+    if (!profile) return;
+    const live = filterLiveBoosts(profile.active_boosts);
+    if (live.length === profile.active_boosts.length) return;
+    const { data } = await supabase
+      .from("profiles")
+      .update({ active_boosts: live } as any)
+      .eq("id", profile.id)
+      .select()
+      .single();
+    if (data) set({ profile: normalizeProfile(data) });
+  },
+
+  awardFocusXP: async (minutes) => {
+    const profile = get().profile;
+    if (!profile) return 0;
+    const mult = xpMultiplierFromBoosts(profile.active_boosts);
+    const gained = Math.round(minutes * 3 * mult);
+    const { data } = await supabase
+      .from("profiles")
+      .update({
+        xp: profile.xp + gained,
+        focus_minutes_total: profile.focus_minutes_total + minutes,
+      } as any)
+      .eq("id", profile.id)
+      .select()
+      .single();
+    if (data) {
+      set({ profile: normalizeProfile(data) });
+      await get().syncBoxes();
+    }
+    return gained;
   },
 
   recordMistake: async ({ question, userChoice, timeSpent, reason }) => {
@@ -325,8 +488,8 @@ export const useNova = create<NovaState>((set, get) => ({
     if (!profile) return 0;
 
     const baseXP = xpForDifficulty(difficulty);
-    const boosted = profile.xp_boost_until && new Date(profile.xp_boost_until).getTime() > Date.now();
-    const gained = boosted ? baseXP * 2 : baseXP;
+    const mult = xpMultiplierFromBoosts(profile.active_boosts);
+    const gained = baseXP * mult;
     const newXP = profile.xp + gained;
     const { data } = await supabase
       .from("profiles")
@@ -336,7 +499,7 @@ export const useNova = create<NovaState>((set, get) => ({
       .single();
 
     if (data) {
-      set({ profile: data as Profile });
+      set({ profile: normalizeProfile(data) });
       await get().syncBoxes();
     }
     return gained;
@@ -381,7 +544,7 @@ export const useNova = create<NovaState>((set, get) => ({
 
     set((state) => ({
       sessions: data ? [data as SessionSummary, ...state.sessions] : state.sessions,
-      profile: (updatedProfile as Profile) ?? state.profile,
+      profile: normalizeProfile(updatedProfile) ?? state.profile,
     }));
   },
 

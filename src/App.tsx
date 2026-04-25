@@ -11,7 +11,7 @@ import NotFound from "./pages/NotFound.tsx";
 import Practice from "./pages/Practice.tsx";
 import DailyPlan from "./pages/DailyPlan.tsx";
 import AICoach from "./pages/AICoach.tsx";
-import MistakeBank from "./pages/MistakeBank.tsx";
+import WeakAreas from "./pages/WeakAreas.tsx";
 import Analytics from "./pages/Analytics.tsx";
 import TestSession from "./pages/TestSession.tsx";
 import Auth from "./pages/Auth.tsx";
@@ -19,6 +19,8 @@ import Profile from "./pages/Profile.tsx";
 import Boxes from "./pages/Boxes.tsx";
 import Store from "./pages/Store.tsx";
 import CoachArticle from "./pages/CoachArticle.tsx";
+import Focus from "./pages/Focus.tsx";
+import Inventory from "./pages/Inventory.tsx";
 
 const queryClient = new QueryClient();
 
@@ -35,11 +37,13 @@ const App = () => (
             <Route path="/" element={<RequireAuth><Index /></RequireAuth>} />
             <Route path="/practice" element={<RequireAuth><Practice /></RequireAuth>} />
             <Route path="/plan" element={<RequireAuth><DailyPlan /></RequireAuth>} />
+            <Route path="/focus" element={<RequireAuth><Focus /></RequireAuth>} />
             <Route path="/coach" element={<RequireAuth><AICoach /></RequireAuth>} />
             <Route path="/coach/:slug" element={<RequireAuth><CoachArticle /></RequireAuth>} />
-            <Route path="/mistakes" element={<RequireAuth><MistakeBank /></RequireAuth>} />
+            <Route path="/weak-areas" element={<RequireAuth><WeakAreas /></RequireAuth>} />
             <Route path="/analytics" element={<RequireAuth><Analytics /></RequireAuth>} />
             <Route path="/profile" element={<RequireAuth><Profile /></RequireAuth>} />
+            <Route path="/inventory" element={<RequireAuth><Inventory /></RequireAuth>} />
             <Route path="/boxes" element={<RequireAuth><Boxes /></RequireAuth>} />
             <Route path="/store" element={<RequireAuth><Store /></RequireAuth>} />
             <Route path="/test/:mode" element={<RequireAuth><TestSession /></RequireAuth>} />

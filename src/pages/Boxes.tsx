@@ -87,6 +87,9 @@ const Boxes = () => {
                 <div className="mt-6 animate-scale-in rounded-xl border border-success/30 bg-success/10 p-4">
                   {lastReward.type === "sp" ? <Gem className="mx-auto h-7 w-7 text-secondary" /> : <Zap className="mx-auto h-7 w-7 text-warning" />}
                   <div className="mt-2 font-display text-xl font-semibold">{lastReward.label}</div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {lastReward.type === "sp" ? "Added to your SP balance." : "Saved to your Rewards inventory — activate it when ready."}
+                  </p>
                   <button onClick={nextBox} className="mt-4 w-full rounded-lg bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground">{unopened.length > 1 ? "Next box" : "Done"}</button>
                 </div>
               ) : (
