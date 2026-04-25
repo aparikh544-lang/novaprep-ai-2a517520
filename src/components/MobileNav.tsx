@@ -5,11 +5,13 @@ import {
   Target,
   CalendarDays,
   Sparkles,
-  Bookmark,
+  TrendingDown,
   BarChart3,
   UserCircle,
   Gift,
   ShoppingBag,
+  Backpack,
+  Timer,
   Rocket,
   Menu,
   X,
@@ -19,10 +21,12 @@ const items = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
   { to: "/practice", label: "Practice", icon: Target },
   { to: "/plan", label: "Daily Plan", icon: CalendarDays },
+  { to: "/focus", label: "Focus", icon: Timer },
   { to: "/coach", label: "AI Coach", icon: Sparkles },
-  { to: "/mistakes", label: "Mistake Bank", icon: Bookmark },
+  { to: "/weak-areas", label: "Weak Areas", icon: TrendingDown },
   { to: "/analytics", label: "Analytics", icon: BarChart3 },
   { to: "/profile", label: "Profile", icon: UserCircle },
+  { to: "/inventory", label: "Rewards", icon: Backpack },
   { to: "/boxes", label: "Boxes", icon: Gift },
   { to: "/store", label: "Store", icon: ShoppingBag },
 ];
@@ -54,7 +58,7 @@ export function MobileNav() {
           onClick={() => setOpen(false)}
         >
           <div
-            className="absolute right-0 top-0 h-full w-72 bg-sidebar border-l border-sidebar-border p-6 flex flex-col"
+            className="absolute right-0 top-0 h-full w-72 bg-sidebar border-l border-sidebar-border p-6 flex flex-col overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex justify-end">

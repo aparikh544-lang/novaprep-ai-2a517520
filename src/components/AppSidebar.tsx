@@ -4,11 +4,13 @@ import {
   Target,
   CalendarDays,
   Sparkles,
-  Bookmark,
+  TrendingDown,
   BarChart3,
   UserCircle,
   Gift,
   ShoppingBag,
+  Backpack,
+  Timer,
   Rocket,
   LogOut,
 } from "lucide-react";
@@ -20,10 +22,12 @@ const items = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
   { to: "/practice", label: "Practice", icon: Target },
   { to: "/plan", label: "Daily Plan", icon: CalendarDays },
+  { to: "/focus", label: "Focus", icon: Timer },
   { to: "/coach", label: "AI Coach", icon: Sparkles },
-  { to: "/mistakes", label: "Mistake Bank", icon: Bookmark },
+  { to: "/weak-areas", label: "Weak Areas", icon: TrendingDown },
   { to: "/analytics", label: "Analytics", icon: BarChart3 },
   { to: "/profile", label: "Profile", icon: UserCircle },
+  { to: "/inventory", label: "Rewards", icon: Backpack },
   { to: "/boxes", label: "Boxes", icon: Gift },
   { to: "/store", label: "Store", icon: ShoppingBag },
 ];
@@ -54,7 +58,7 @@ export function AppSidebar() {
         </div>
       </div>
 
-      <nav className="flex-1 px-3 space-y-1">
+      <nav className="flex-1 px-3 space-y-1 overflow-y-auto">
         {items.map((it) => (
           <NavLink
             key={it.to}
@@ -111,9 +115,6 @@ export function AppSidebar() {
         >
           <LogOut className="h-3.5 w-3.5" /> Sign out
         </button>
-        <p className="mt-3 text-[10px] leading-relaxed text-muted-foreground/70 px-1">
-          Independent practice platform; not affiliated with College Board.
-        </p>
       </div>
     </aside>
   );
