@@ -5,7 +5,9 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { RequireAuth } from "@/components/RequireAuth";
+import { RequireAdmin } from "@/components/RequireAdmin";
 import { DataBootstrap } from "@/components/DataBootstrap";
+import { OnboardingGate } from "@/components/OnboardingGate";
 import Index from "./pages/Index.tsx";
 import NotFound from "./pages/NotFound.tsx";
 import Practice from "./pages/Practice.tsx";
@@ -21,6 +23,9 @@ import Store from "./pages/Store.tsx";
 import CoachArticle from "./pages/CoachArticle.tsx";
 import Focus from "./pages/Focus.tsx";
 import Inventory from "./pages/Inventory.tsx";
+import Help from "./pages/Help.tsx";
+import AdminUsers from "./pages/admin/Users.tsx";
+import AdminReviews from "./pages/admin/Reviews.tsx";
 
 const queryClient = new QueryClient();
 
@@ -32,6 +37,7 @@ const App = () => (
       <BrowserRouter>
         <AuthProvider>
           <DataBootstrap />
+          <OnboardingGate />
           <Routes>
             <Route path="/auth" element={<Auth />} />
             <Route path="/" element={<RequireAuth><Index /></RequireAuth>} />
@@ -46,6 +52,9 @@ const App = () => (
             <Route path="/inventory" element={<RequireAuth><Inventory /></RequireAuth>} />
             <Route path="/boxes" element={<RequireAuth><Boxes /></RequireAuth>} />
             <Route path="/store" element={<RequireAuth><Store /></RequireAuth>} />
+            <Route path="/help" element={<RequireAuth><Help /></RequireAuth>} />
+            <Route path="/admin/users" element={<RequireAuth><RequireAdmin><AdminUsers /></RequireAdmin></RequireAuth>} />
+            <Route path="/admin/reviews" element={<RequireAuth><RequireAdmin><AdminReviews /></RequireAdmin></RequireAuth>} />
             <Route path="/test/:mode" element={<RequireAuth><TestSession /></RequireAuth>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
