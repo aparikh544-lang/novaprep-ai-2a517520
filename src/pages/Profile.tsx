@@ -1,12 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Award, CalendarDays, Flame, Medal, ShieldCheck, Star, Target, Trophy, UserCircle, Zap, Gem, Clock3, BookOpenCheck, Crown, Timer, Backpack, Sparkles, Snowflake, Rocket, Brain, TrendingUp } from "lucide-react";
+import { Award, CalendarDays, Flame, Medal, ShieldCheck, Star, Target, Trophy, UserCircle, Zap, Gem, Clock3, BookOpenCheck, Crown, Timer, Backpack, Sparkles, Snowflake, Rocket, Brain, TrendingUp, ShieldQuestion } from "lucide-react";
 import { AppLayout } from "@/components/AppLayout";
 import { GlassCard } from "@/components/GlassCard";
 import { useNova } from "@/lib/novaprep-store";
 import { rankFromXP } from "@/lib/novaprep-data";
 import { deriveNovaStats } from "@/lib/novaprep-stats";
 import { toast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import { useIsAdmin } from "@/hooks/useIsAdmin";
 
 const badgeCatalog = [
   // Practice volume
@@ -50,6 +53,8 @@ const Profile = () => {
   const mistakes = useNova((s) => s.mistakes);
   const sessions = useNova((s) => s.sessions);
   const updateProfile = useNova((s) => s.updateProfile);
+  const { user } = useAuth();
+  const { isAdmin } = useIsAdmin();
   const xp = profile?.xp ?? 0;
   const rank = rankFromXP(xp);
   const pct = rank.ceiling === rank.floor ? 100 : Math.min(100, ((xp - rank.floor) / (rank.ceiling - rank.floor)) * 100);
@@ -58,6 +63,7 @@ const Profile = () => {
   const [displayName, setDisplayName] = useState(profile?.display_name ?? "");
   const [targetScore, setTargetScore] = useState(String(profile?.target_score ?? ""));
   const [testDate, setTestDate] = useState(profile?.test_date ?? "");
+  const [adminExists, setAdminExists] = useState<boolean | null>(null);
   const badgeState = { sessions: sessions.length, accuracy: stats.accuracy, bestAccuracy: stats.bestAccuracy, mistakes: mistakes.length, streak: profile?.streak ?? 0, xp, sp: profile?.sp ?? 0, hours: stats.hoursLogged, level: rank.level, targetScore: profile?.target_score, testDate: profile?.test_date, avgPace: stats.avgPace, projected: stats.projectedScore, focusMinutes: profile?.focus_minutes_total ?? 0, inventory: (profile?.inventory ?? []).length };
 
   useEffect(() => {
@@ -65,6 +71,27 @@ const Profile = () => {
     setTargetScore(String(profile?.target_score ?? ""));
     setTestDate(profile?.test_date ?? "");
   }, [profile?.display_name, profile?.target_score, profile?.test_date]);
+
+  useEffect(() => {
+    // One-time bootstrap: if no admin exists, show claim option
+    supabase
+      .from("user_roles")
+      .select("user_id", { count: "exact", head: true })
+      .eq("role", "admin")
+      .then(({ count }) => setAdminExists((count ?? 0) > 0));
+  }, [isAdmin]);
+
+  const claimAdmin = async () => {
+    if (!user) return;
+    const { error } = await supabase.from("user_roles").insert({ user_id: user.id, role: "admin" });
+    if (error) {
+      toast({ title: "Could not claim admin", description: error.message, variant: "destructive" });
+      return;
+    }
+    toast({ title: "Admin access granted", description: "Reload to see admin tabs in the sidebar." });
+    setAdminExists(true);
+    setTimeout(() => window.location.reload(), 800);
+  };
 
   const save = async () => {
     await updateProfile({ display_name: displayName || null, target_score: targetScore ? Number(targetScore) : null, test_date: testDate || null });
@@ -108,7 +135,27 @@ const Profile = () => {
             </div>
             <button onClick={save} className="w-full rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground">Save changes</button>
           </div>
-          <Link to="/boxes" className="mt-5 inline-flex px-4 py-2 rounded-lg bg-muted border border-border text-sm font-medium">Open mystery boxes</Link>
+          <div className="mt-5 flex flex-wrap gap-2">
+            <Link to="/boxes" className="inline-flex px-4 py-2 rounded-lg bg-muted border border-border text-sm font-medium">Open mystery boxes</Link>
+            <Link to="/help" className="inline-flex px-4 py-2 rounded-lg bg-muted border border-border text-sm font-medium">Help & tour</Link>
+          </div>
+          {adminExists === false && !isAdmin && (
+            <div className="mt-5 rounded-lg border border-warning/40 bg-warning/10 p-4">
+              <div className="flex items-center gap-2 text-warning">
+                <ShieldQuestion className="h-4 w-4" />
+                <span className="text-xs font-mono uppercase tracking-widest">Owner setup</span>
+              </div>
+              <p className="mt-1.5 text-xs text-muted-foreground">
+                No admin has claimed this workspace yet. If you are the owner, claim admin access now to unlock the Users and Reviews pages.
+              </p>
+              <button
+                onClick={claimAdmin}
+                className="mt-3 inline-flex items-center gap-1.5 rounded-md bg-warning/20 border border-warning/40 px-3 py-1.5 text-xs font-medium text-foreground hover:bg-warning/30"
+              >
+                <ShieldCheck className="h-3.5 w-3.5" /> Claim admin access
+              </button>
+            </div>
+          )}
         </GlassCard>
 
         <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4">

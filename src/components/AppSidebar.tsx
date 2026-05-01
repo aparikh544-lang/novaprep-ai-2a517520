@@ -12,11 +12,15 @@ import {
   Backpack,
   Timer,
   Rocket,
+  HelpCircle,
+  ShieldCheck,
+  MessageSquareQuote,
   LogOut,
 } from "lucide-react";
 import { useNova } from "@/lib/novaprep-store";
 import { rankFromXP } from "@/lib/novaprep-data";
 import { useAuth } from "@/contexts/AuthContext";
+import { useIsAdmin } from "@/hooks/useIsAdmin";
 
 const items = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -30,11 +34,18 @@ const items = [
   { to: "/inventory", label: "Rewards", icon: Backpack },
   { to: "/boxes", label: "Boxes", icon: Gift },
   { to: "/store", label: "Store", icon: ShoppingBag },
+  { to: "/help", label: "Help", icon: HelpCircle },
+];
+
+const adminItems = [
+  { to: "/admin/users", label: "Users", icon: ShieldCheck },
+  { to: "/admin/reviews", label: "Reviews", icon: MessageSquareQuote },
 ];
 
 export function AppSidebar() {
   const profile = useNova((s) => s.profile);
   const { signOut } = useAuth();
+  const { isAdmin } = useIsAdmin();
   const xp = profile?.xp ?? 0;
   const info = rankFromXP(xp);
   const pct =
@@ -50,7 +61,7 @@ export function AppSidebar() {
             <Rocket className="h-5 w-5 text-white" />
           </div>
           <div>
-            <div className="font-display font-bold text-lg leading-none tracking-tight">NovaPrep</div>
+            <div className="font-display font-bold text-lg leading-none tracking-tight">NovaPrep AI</div>
             <div className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground mt-1">
               Adaptive · SAT
             </div>
@@ -88,6 +99,31 @@ export function AppSidebar() {
             )}
           </NavLink>
         ))}
+
+        {isAdmin && (
+          <>
+            <div className="mt-4 mb-1 px-3 text-[10px] uppercase tracking-[0.2em] text-warning/80">
+              Admin
+            </div>
+            {adminItems.map((it) => (
+              <NavLink
+                key={it.to}
+                to={it.to}
+                className={({ isActive }) =>
+                  [
+                    "group flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all",
+                    isActive
+                      ? "bg-warning/15 text-foreground shadow-[inset_0_0_0_1px_hsl(var(--warning)/0.4)]"
+                      : "text-sidebar-foreground hover:bg-sidebar-accent/50",
+                  ].join(" ")
+                }
+              >
+                <it.icon className="h-4 w-4 text-warning" />
+                <span className="font-medium">{it.label}</span>
+              </NavLink>
+            ))}
+          </>
+        )}
       </nav>
 
       <div className="p-4">

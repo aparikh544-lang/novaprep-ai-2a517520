@@ -123,10 +123,14 @@ export type Database = {
           focus_minutes_total: number
           id: string
           inventory: Json
+          last_login_at: string | null
+          login_count: number
+          review_prompt_dismissed: boolean
           sp: number
           streak: number
           target_score: number | null
           test_date: string | null
+          tutorial_completed: boolean
           updated_at: string
           xp: number
           xp_boost_until: string | null
@@ -138,10 +142,14 @@ export type Database = {
           focus_minutes_total?: number
           id: string
           inventory?: Json
+          last_login_at?: string | null
+          login_count?: number
+          review_prompt_dismissed?: boolean
           sp?: number
           streak?: number
           target_score?: number | null
           test_date?: string | null
+          tutorial_completed?: boolean
           updated_at?: string
           xp?: number
           xp_boost_until?: string | null
@@ -153,13 +161,41 @@ export type Database = {
           focus_minutes_total?: number
           id?: string
           inventory?: Json
+          last_login_at?: string | null
+          login_count?: number
+          review_prompt_dismissed?: boolean
           sp?: number
           streak?: number
           target_score?: number | null
           test_date?: string | null
+          tutorial_completed?: boolean
           updated_at?: string
           xp?: number
           xp_boost_until?: string | null
+        }
+        Relationships: []
+      }
+      reviews: {
+        Row: {
+          comment: string | null
+          created_at: string
+          id: string
+          rating: number
+          user_id: string
+        }
+        Insert: {
+          comment?: string | null
+          created_at?: string
+          id?: string
+          rating: number
+          user_id: string
+        }
+        Update: {
+          comment?: string | null
+          created_at?: string
+          id?: string
+          rating?: number
+          user_id?: string
         }
         Relationships: []
       }
@@ -234,14 +270,78 @@ export type Database = {
           },
         ]
       }
+      user_roles: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      admin_all_reviews: {
+        Args: never
+        Returns: {
+          comment: string
+          created_at: string
+          display_name: string
+          id: string
+          rating: number
+          user_id: string
+        }[]
+      }
+      admin_global_stats: {
+        Args: never
+        Returns: {
+          avg_rating: number
+          total_focus_minutes: number
+          total_reviews: number
+          total_session_seconds: number
+          total_sessions: number
+          total_users: number
+          total_xp: number
+        }[]
+      }
+      admin_user_summary: {
+        Args: never
+        Returns: {
+          created_at: string
+          display_name: string
+          focus_minutes_total: number
+          last_login_at: string
+          login_count: number
+          streak: number
+          user_id: string
+          xp: number
+        }[]
+      }
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
+      app_role: "admin" | "user"
       box_tier: "common" | "rare" | "epic" | "legendary"
     }
     CompositeTypes: {
@@ -370,6 +470,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      app_role: ["admin", "user"],
       box_tier: ["common", "rare", "epic", "legendary"],
     },
   },
