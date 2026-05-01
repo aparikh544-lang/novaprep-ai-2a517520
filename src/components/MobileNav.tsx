@@ -13,9 +13,13 @@ import {
   Backpack,
   Timer,
   Rocket,
+  HelpCircle,
+  ShieldCheck,
+  MessageSquareQuote,
   Menu,
   X,
 } from "lucide-react";
+import { useIsAdmin } from "@/hooks/useIsAdmin";
 
 const items = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -29,10 +33,17 @@ const items = [
   { to: "/inventory", label: "Rewards", icon: Backpack },
   { to: "/boxes", label: "Boxes", icon: Gift },
   { to: "/store", label: "Store", icon: ShoppingBag },
+  { to: "/help", label: "Help", icon: HelpCircle },
+];
+
+const adminItems = [
+  { to: "/admin/users", label: "Users", icon: ShieldCheck },
+  { to: "/admin/reviews", label: "Reviews", icon: MessageSquareQuote },
 ];
 
 export function MobileNav() {
   const [open, setOpen] = useState(false);
+  const { isAdmin } = useIsAdmin();
 
   return (
     <>
@@ -41,7 +52,7 @@ export function MobileNav() {
           <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-primary to-secondary flex items-center justify-center">
             <Rocket className="h-4 w-4 text-white" />
           </div>
-          <span className="font-display font-bold tracking-tight">NovaPrep</span>
+          <span className="font-display font-bold tracking-tight">NovaPrep AI</span>
         </div>
         <button
           onClick={() => setOpen(true)}
@@ -86,6 +97,32 @@ export function MobileNav() {
                   <span className="font-medium">{it.label}</span>
                 </NavLink>
               ))}
+
+              {isAdmin && (
+                <>
+                  <div className="mt-3 mb-1 px-3 text-[10px] uppercase tracking-[0.2em] text-warning/80">
+                    Admin
+                  </div>
+                  {adminItems.map((it) => (
+                    <NavLink
+                      key={it.to}
+                      to={it.to}
+                      onClick={() => setOpen(false)}
+                      className={({ isActive }) =>
+                        [
+                          "flex items-center gap-3 px-3 py-3 rounded-lg text-sm transition-colors",
+                          isActive
+                            ? "bg-warning/15 text-foreground"
+                            : "text-sidebar-foreground hover:bg-sidebar-accent/50",
+                        ].join(" ")
+                      }
+                    >
+                      <it.icon className="h-4 w-4 text-warning" />
+                      <span className="font-medium">{it.label}</span>
+                    </NavLink>
+                  ))}
+                </>
+              )}
             </nav>
           </div>
         </div>
