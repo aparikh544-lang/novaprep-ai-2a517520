@@ -70,7 +70,7 @@ const Auth = () => {
             <Rocket className="h-5 w-5 text-white" />
           </div>
           <div>
-            <div className="font-display font-bold text-xl leading-none">NovaPrep</div>
+            <div className="font-display font-bold text-xl leading-none">NovaPrep AI</div>
             <div className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground mt-1">
               {mode === "signup" ? "Create your mission" : "Resume your mission"}
             </div>
@@ -140,7 +140,7 @@ const Auth = () => {
         </form>
 
         <div className="mt-5 text-center text-xs text-muted-foreground">
-          {mode === "signup" ? "Already a Cadet?" : "New to NovaPrep?"}{" "}
+          {mode === "signup" ? "Already a Cadet?" : "New to NovaPrep AI?"}{" "}
           <button
             onClick={() => setMode(mode === "signup" ? "signin" : "signup")}
             className="text-secondary hover:text-secondary-glow"
