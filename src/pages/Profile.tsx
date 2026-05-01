@@ -53,6 +53,8 @@ const Profile = () => {
   const mistakes = useNova((s) => s.mistakes);
   const sessions = useNova((s) => s.sessions);
   const updateProfile = useNova((s) => s.updateProfile);
+  const { user } = useAuth();
+  const { isAdmin } = useIsAdmin();
   const xp = profile?.xp ?? 0;
   const rank = rankFromXP(xp);
   const pct = rank.ceiling === rank.floor ? 100 : Math.min(100, ((xp - rank.floor) / (rank.ceiling - rank.floor)) * 100);
@@ -61,6 +63,7 @@ const Profile = () => {
   const [displayName, setDisplayName] = useState(profile?.display_name ?? "");
   const [targetScore, setTargetScore] = useState(String(profile?.target_score ?? ""));
   const [testDate, setTestDate] = useState(profile?.test_date ?? "");
+  const [adminExists, setAdminExists] = useState<boolean | null>(null);
   const badgeState = { sessions: sessions.length, accuracy: stats.accuracy, bestAccuracy: stats.bestAccuracy, mistakes: mistakes.length, streak: profile?.streak ?? 0, xp, sp: profile?.sp ?? 0, hours: stats.hoursLogged, level: rank.level, targetScore: profile?.target_score, testDate: profile?.test_date, avgPace: stats.avgPace, projected: stats.projectedScore, focusMinutes: profile?.focus_minutes_total ?? 0, inventory: (profile?.inventory ?? []).length };
 
   useEffect(() => {
@@ -68,6 +71,27 @@ const Profile = () => {
     setTargetScore(String(profile?.target_score ?? ""));
     setTestDate(profile?.test_date ?? "");
   }, [profile?.display_name, profile?.target_score, profile?.test_date]);
+
+  useEffect(() => {
+    // One-time bootstrap: if no admin exists, show claim option
+    supabase
+      .from("user_roles")
+      .select("user_id", { count: "exact", head: true })
+      .eq("role", "admin")
+      .then(({ count }) => setAdminExists((count ?? 0) > 0));
+  }, [isAdmin]);
+
+  const claimAdmin = async () => {
+    if (!user) return;
+    const { error } = await supabase.from("user_roles").insert({ user_id: user.id, role: "admin" });
+    if (error) {
+      toast({ title: "Could not claim admin", description: error.message, variant: "destructive" });
+      return;
+    }
+    toast({ title: "Admin access granted", description: "Reload to see admin tabs in the sidebar." });
+    setAdminExists(true);
+    setTimeout(() => window.location.reload(), 800);
+  };
 
   const save = async () => {
     await updateProfile({ display_name: displayName || null, target_score: targetScore ? Number(targetScore) : null, test_date: testDate || null });
