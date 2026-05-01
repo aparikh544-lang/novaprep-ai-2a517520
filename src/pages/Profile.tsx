@@ -135,7 +135,27 @@ const Profile = () => {
             </div>
             <button onClick={save} className="w-full rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground">Save changes</button>
           </div>
-          <Link to="/boxes" className="mt-5 inline-flex px-4 py-2 rounded-lg bg-muted border border-border text-sm font-medium">Open mystery boxes</Link>
+          <div className="mt-5 flex flex-wrap gap-2">
+            <Link to="/boxes" className="inline-flex px-4 py-2 rounded-lg bg-muted border border-border text-sm font-medium">Open mystery boxes</Link>
+            <Link to="/help" className="inline-flex px-4 py-2 rounded-lg bg-muted border border-border text-sm font-medium">Help & tour</Link>
+          </div>
+          {adminExists === false && !isAdmin && (
+            <div className="mt-5 rounded-lg border border-warning/40 bg-warning/10 p-4">
+              <div className="flex items-center gap-2 text-warning">
+                <ShieldQuestion className="h-4 w-4" />
+                <span className="text-xs font-mono uppercase tracking-widest">Owner setup</span>
+              </div>
+              <p className="mt-1.5 text-xs text-muted-foreground">
+                No admin has claimed this workspace yet. If you are the owner, claim admin access now to unlock the Users and Reviews pages.
+              </p>
+              <button
+                onClick={claimAdmin}
+                className="mt-3 inline-flex items-center gap-1.5 rounded-md bg-warning/20 border border-warning/40 px-3 py-1.5 text-xs font-medium text-foreground hover:bg-warning/30"
+              >
+                <ShieldCheck className="h-3.5 w-3.5" /> Claim admin access
+              </button>
+            </div>
+          )}
         </GlassCard>
 
         <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4">
