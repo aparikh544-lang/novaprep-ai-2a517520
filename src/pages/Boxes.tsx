@@ -21,6 +21,7 @@ const Boxes = () => {
   const upgradeMysteryBox = useNova((s) => s.upgradeMysteryBox);
   const openMysteryBox = useNova((s) => s.openMysteryBox);
   const unopened = useMemo(() => boxes.filter((box) => !box.reward_payload && !box.claimed_at), [boxes]);
+  const opened = useMemo(() => boxes.filter((box) => box.reward_payload || box.claimed_at), [boxes]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [opening, setOpening] = useState(false);
   const [lastReward, setLastReward] = useState<BoxReward | null>(null);
