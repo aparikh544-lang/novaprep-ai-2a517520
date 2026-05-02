@@ -67,10 +67,16 @@ const Boxes = () => {
           <p className="text-muted-foreground mt-2 max-w-2xl">Open level rewards Starr Drop-style: tap each box up to 3 times, then reveal SP or timed 2x XP.</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <div className="glass px-4 py-3 text-sm text-muted-foreground">{unopened.length} unopened · {(profile?.sp ?? 0).toLocaleString()} SP</div>
+          <div className="glass px-4 py-3 text-sm text-muted-foreground">{unopened.length} unopened · {opened.length} opened · {(profile?.sp ?? 0).toLocaleString()} SP</div>
           <button onClick={beginOpening} disabled={!unopened.length} className="rounded-lg bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground disabled:opacity-50">Open boxes</button>
         </div>
       </div>
+
+      {opened.length > 0 && (
+        <p className="text-xs text-muted-foreground -mt-4 mb-4">
+          {opened.length} box{opened.length === 1 ? "" : "es"} already claimed — rewards live in your inventory or SP balance.
+        </p>
+      )}
 
       {activeBox && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/85 backdrop-blur-xl animate-fade-in p-5">
