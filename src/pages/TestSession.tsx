@@ -69,8 +69,15 @@ const TestSession = () => {
   const [done, setDone] = useState(false);
   const [xpEarned, setXpEarned] = useState(0);
   const [completed, setCompleted] = useState({ correct: 0, total: 0, seconds: 0, xp: 0 });
+  const [exitOpen, setExitOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
   const currentLimit = m === "full" ? (module === 1 ? 64 * 60 : 70 * 60) : MODULE_LIMIT[m];
+  const exerciseName =
+    m === "full" ? "Full SAT Simulation" :
+    m === "reading" ? "Reading & Writing drill" :
+    m === "math" ? "Math drill" :
+    m === "redemption" ? "Weak-area redemption drill" :
+    "Mistake review";
 
   const cleanExplanation = (text: string) =>
     text
@@ -306,7 +313,7 @@ const TestSession = () => {
             <div className="flex items-center gap-4 text-xs font-mono text-muted-foreground">
               <span className="flex items-center gap-1.5"><Clock className="h-3.5 w-3.5" /> {fmtTime(Math.max(0, currentLimit - sessionTime))}</span>
               <span>{idx + 1} / {questions.length}</span>
-              <button onClick={() => nav("/practice")} className="p-1.5 rounded hover:bg-muted" aria-label="Exit"><X className="h-4 w-4" /></button>
+              <button onClick={() => setExitOpen(true)} className="p-1.5 rounded hover:bg-muted" aria-label="Exit"><X className="h-4 w-4" /></button>
             </div>
           </div>
           <div className="h-0.5 bg-muted"><div className="h-full bg-gradient-to-r from-primary to-secondary transition-all" style={{ width: `${(answeredCount / questions.length) * 100}%` }} /></div>
