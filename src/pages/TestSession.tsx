@@ -362,6 +362,20 @@ const TestSession = () => {
           </div>
         </footer>
       </div>
+      <AlertDialog open={exitOpen} onOpenChange={setExitOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Do you really want to exit this session?</AlertDialogTitle>
+            <AlertDialogDescription>
+              You will lose all your progress and XP for this {exerciseName}.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>No, keep going</AlertDialogCancel>
+            <AlertDialogAction onClick={() => nav("/practice")}>Yes, exit</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
