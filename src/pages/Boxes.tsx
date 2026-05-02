@@ -21,6 +21,7 @@ const Boxes = () => {
   const upgradeMysteryBox = useNova((s) => s.upgradeMysteryBox);
   const openMysteryBox = useNova((s) => s.openMysteryBox);
   const unopened = useMemo(() => boxes.filter((box) => !box.reward_payload && !box.claimed_at), [boxes]);
+  const opened = useMemo(() => boxes.filter((box) => box.reward_payload || box.claimed_at), [boxes]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [opening, setOpening] = useState(false);
   const [lastReward, setLastReward] = useState<BoxReward | null>(null);
@@ -66,10 +67,16 @@ const Boxes = () => {
           <p className="text-muted-foreground mt-2 max-w-2xl">Open level rewards Starr Drop-style: tap each box up to 3 times, then reveal SP or timed 2x XP.</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <div className="glass px-4 py-3 text-sm text-muted-foreground">{unopened.length} unopened · {(profile?.sp ?? 0).toLocaleString()} SP</div>
+          <div className="glass px-4 py-3 text-sm text-muted-foreground">{unopened.length} unopened · {opened.length} opened · {(profile?.sp ?? 0).toLocaleString()} SP</div>
           <button onClick={beginOpening} disabled={!unopened.length} className="rounded-lg bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground disabled:opacity-50">Open boxes</button>
         </div>
       </div>
+
+      {opened.length > 0 && (
+        <p className="text-xs text-muted-foreground -mt-4 mb-4">
+          {opened.length} box{opened.length === 1 ? "" : "es"} already claimed — rewards live in your inventory or SP balance.
+        </p>
+      )}
 
       {activeBox && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/85 backdrop-blur-xl animate-fade-in p-5">
@@ -104,25 +111,34 @@ const Boxes = () => {
         </div>
       )}
 
-      <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-        {boxes.map((box) => {
-          const Icon = tierIcon[box.tier];
-          const opened = Boolean(box.reward_payload || box.claimed_at);
-          return (
-            <GlassCard key={box.id} className={`overflow-hidden ${tierStyles[box.tier]}`}>
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="text-xs uppercase tracking-[0.25em] text-secondary">Level {box.level_number}</p>
-                  <h2 className="font-display text-2xl font-semibold mt-2">{tierLabels[box.tier]} Drop</h2>
-                  <p className="text-sm text-muted-foreground mt-2">{opened ? `Claimed: ${box.reward_payload?.label ?? "Reward"}` : box.reward_label ?? `Level ${box.level_number} reward crate`}</p>
+      {unopened.length === 0 ? (
+        <GlassCard className="text-center py-12">
+          <Box className="mx-auto h-10 w-10 text-muted-foreground" />
+          <h2 className="font-display text-2xl font-semibold mt-4">No boxes waiting</h2>
+          <p className="text-sm text-muted-foreground mt-2 max-w-md mx-auto">
+            Earn more XP to unlock new mystery boxes. Each new level drops a fresh crate here.
+          </p>
+        </GlassCard>
+      ) : (
+        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+          {unopened.map((box) => {
+            const Icon = tierIcon[box.tier];
+            return (
+              <GlassCard key={box.id} className={`overflow-hidden ${tierStyles[box.tier]}`}>
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.25em] text-secondary">Level {box.level_number}</p>
+                    <h2 className="font-display text-2xl font-semibold mt-2">{tierLabels[box.tier]} Drop</h2>
+                    <p className="text-sm text-muted-foreground mt-2">{box.reward_label ?? `Level ${box.level_number} reward crate`}</p>
+                  </div>
+                  <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-border bg-background/30 animate-float"><Icon className={box.tier === "legendary" ? "h-7 w-7 text-warning" : "h-7 w-7 text-secondary"} /></div>
                 </div>
-                <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-border bg-background/30 animate-float"><Icon className={box.tier === "legendary" ? "h-7 w-7 text-warning" : "h-7 w-7 text-secondary"} /></div>
-              </div>
-              <button onClick={() => setActiveId(box.id)} disabled={opened} className="mt-6 w-full rounded-lg bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50">{opened ? "Opened" : "Open sequence"}</button>
-            </GlassCard>
-          );
-        })}
-      </div>
+                <button onClick={() => setActiveId(box.id)} className="mt-6 w-full rounded-lg bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90">Open sequence</button>
+              </GlassCard>
+            );
+          })}
+        </div>
+      )}
     </AppLayout>
   );
 };

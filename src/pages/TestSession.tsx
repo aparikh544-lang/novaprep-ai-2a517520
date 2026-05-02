@@ -4,8 +4,19 @@ import { Clock, Flag, X, ChevronRight, Rocket, Loader2, AlertTriangle } from "lu
 import { Question, ErrorReason } from "@/lib/novaprep-data";
 import { useNova } from "@/lib/novaprep-store";
 import { generateQuestions } from "@/lib/generate-questions";
+import { sanitizeMath } from "@/lib/sanitize-math";
 import { toast } from "@/hooks/use-toast";
 import { taskCompletionKey } from "@/lib/practice-links";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 type Mode = "full" | "reading" | "math" | "redemption" | "review";
 type AnswerValue = number | string;
@@ -19,7 +30,7 @@ function fmtTime(s: number) {
 const MODULE_SIZE: Record<Mode, number> = { full: 54, reading: 27, math: 22, redemption: 12, review: 10 };
 const MODULE_LIMIT: Record<Mode, number> = { full: 64 * 60, reading: 32 * 60, math: 35 * 60, redemption: 18 * 60, review: 15 * 60 };
 
-const textLines = (text: string) => text.replace(/\\n/g, "\n").split("\n");
+const textLines = (text: string) => sanitizeMath(text).split("\n");
 const renderText = (text: string) => textLines(text).map((line, i, arr) => <span key={i}>{line}{i < arr.length - 1 && <br />}</span>);
 const normalizeSPR = (value: AnswerValue | undefined) => String(value ?? "").trim().toLowerCase().replace(/\s+/g, "");
 const isCorrectAnswer = (q: Question, answer: AnswerValue | undefined) => {
@@ -58,8 +69,15 @@ const TestSession = () => {
   const [done, setDone] = useState(false);
   const [xpEarned, setXpEarned] = useState(0);
   const [completed, setCompleted] = useState({ correct: 0, total: 0, seconds: 0, xp: 0 });
+  const [exitOpen, setExitOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
   const currentLimit = m === "full" ? (module === 1 ? 64 * 60 : 70 * 60) : MODULE_LIMIT[m];
+  const exerciseName =
+    m === "full" ? "Full SAT Simulation" :
+    m === "reading" ? "Reading & Writing drill" :
+    m === "math" ? "Math drill" :
+    m === "redemption" ? "Weak-area redemption drill" :
+    "Mistake review";
 
   const cleanExplanation = (text: string) =>
     text
@@ -295,7 +313,7 @@ const TestSession = () => {
             <div className="flex items-center gap-4 text-xs font-mono text-muted-foreground">
               <span className="flex items-center gap-1.5"><Clock className="h-3.5 w-3.5" /> {fmtTime(Math.max(0, currentLimit - sessionTime))}</span>
               <span>{idx + 1} / {questions.length}</span>
-              <button onClick={() => nav("/practice")} className="p-1.5 rounded hover:bg-muted" aria-label="Exit"><X className="h-4 w-4" /></button>
+              <button onClick={() => setExitOpen(true)} className="p-1.5 rounded hover:bg-muted" aria-label="Exit"><X className="h-4 w-4" /></button>
             </div>
           </div>
           <div className="h-0.5 bg-muted"><div className="h-full bg-gradient-to-r from-primary to-secondary transition-all" style={{ width: `${(answeredCount / questions.length) * 100}%` }} /></div>
@@ -344,6 +362,20 @@ const TestSession = () => {
           </div>
         </footer>
       </div>
+      <AlertDialog open={exitOpen} onOpenChange={setExitOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Do you really want to exit this session?</AlertDialogTitle>
+            <AlertDialogDescription>
+              You will lose all your progress and XP for this {exerciseName}.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>No, keep going</AlertDialogCancel>
+            <AlertDialogAction onClick={() => nav("/practice")}>Yes, exit</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { Question } from "./novaprep-data";
+import { sanitizeMath } from "./sanitize-math";
 
 export interface GenerateOptions {
   mode: "full" | "math" | "reading" | "redemption";
@@ -10,11 +11,11 @@ export interface GenerateOptions {
 }
 
 const clean = (text?: string) =>
-  (text ?? "")
-    .replace(/<think>[\s\S]*?<\/think>/gi, "")
-    .replace(/(^|\n)\s*(reasoning|chain of thought|internal thinking)\s*:[\s\S]*/gi, "")
-    .replace(/\\n/g, "\n")
-    .trim();
+  sanitizeMath(
+    (text ?? "")
+      .replace(/<think>[\s\S]*?<\/think>/gi, "")
+      .replace(/(^|\n)\s*(reasoning|chain of thought|internal thinking)\s*:[\s\S]*/gi, ""),
+  ).trim();
 
 export async function generateQuestions(opts: GenerateOptions): Promise<Question[]> {
   const { data, error } = await supabase.functions.invoke("generate-questions", {
