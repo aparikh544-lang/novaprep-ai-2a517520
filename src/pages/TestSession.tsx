@@ -207,9 +207,11 @@ const TestSession = () => {
     if (taskLabel && dayLabel) await markTaskComplete({ taskKey: taskCompletionKey(dayLabel, taskLabel), taskLabel, dayLabel });
   };
 
+  const [submitting, setSubmitting] = useState(false);
   const proceedSubmit = async () => {
+    if (submitting) return;
+    setSubmitting(true);
     stampTime();
-    setReviewing(false);
     const result = await gradeCurrentModule();
     if (m === "full" && module === 1) {
       const harder = result.correct / questions.length >= 0.6;
@@ -221,9 +223,13 @@ const TestSession = () => {
       setTimeByQuestion({});
       setSessionTime(0);
       await loadQuestions(harder ? "harder" : "easier", 2);
+      setReviewing(false);
+      setSubmitting(false);
       return;
     }
     await finishSession(result.correct, questions.length, result.gained);
+    setSubmitting(false);
+    setReviewing(false);
   };
 
   if (loading) {
