@@ -202,6 +202,26 @@ const inventoryFromReward = (reward: BoxReward): InventoryItem | null => {
   return null;
 };
 
+const FOCUS_KEY = "novaprep:focus-timer";
+const loadFocus = (): FocusTimerState => {
+  if (typeof window === "undefined") return { duration: 25 * 60, endsAt: null, remaining: 25 * 60, running: false };
+  try {
+    const raw = window.localStorage.getItem(FOCUS_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw) as FocusTimerState;
+      if (parsed.running && parsed.endsAt) {
+        const left = Math.max(0, Math.round((parsed.endsAt - Date.now()) / 1000));
+        return { ...parsed, remaining: left, running: left > 0 };
+      }
+      return parsed;
+    }
+  } catch {}
+  return { duration: 25 * 60, endsAt: null, remaining: 25 * 60, running: false };
+};
+const saveFocus = (f: FocusTimerState) => {
+  try { window.localStorage.setItem(FOCUS_KEY, JSON.stringify(f)); } catch {}
+};
+
 export const useNova = create<NovaState>((set, get) => ({
   profile: null,
   mistakes: [],
@@ -209,6 +229,42 @@ export const useNova = create<NovaState>((set, get) => ({
   taskCompletions: [],
   mysteryBoxes: [],
   loading: false,
+  focusTimer: loadFocus(),
+
+  setFocusDuration: (seconds) => {
+    const f: FocusTimerState = { duration: seconds, endsAt: null, remaining: seconds, running: false };
+    saveFocus(f);
+    set({ focusTimer: f });
+  },
+  startFocusTimer: () => {
+    const cur = get().focusTimer;
+    const remaining = cur.remaining > 0 ? cur.remaining : cur.duration;
+    const f: FocusTimerState = { ...cur, remaining, endsAt: Date.now() + remaining * 1000, running: true };
+    saveFocus(f);
+    set({ focusTimer: f });
+  },
+  pauseFocusTimer: () => {
+    const cur = get().focusTimer;
+    const remaining = cur.endsAt ? Math.max(0, Math.round((cur.endsAt - Date.now()) / 1000)) : cur.remaining;
+    const f: FocusTimerState = { ...cur, remaining, endsAt: null, running: false };
+    saveFocus(f);
+    set({ focusTimer: f });
+  },
+  resetFocusTimer: () => {
+    const cur = get().focusTimer;
+    const f: FocusTimerState = { duration: cur.duration, endsAt: null, remaining: cur.duration, running: false };
+    saveFocus(f);
+    set({ focusTimer: f });
+  },
+  completeFocusTimer: async () => {
+    const cur = get().focusTimer;
+    const minutes = Math.max(1, Math.floor(cur.duration / 60));
+    const xp = await get().awardFocusXP(minutes);
+    const f: FocusTimerState = { duration: cur.duration, endsAt: null, remaining: 0, running: false };
+    saveFocus(f);
+    set({ focusTimer: f });
+    return xp;
+  },
 
   loadAll: async (userId) => {
     set({ loading: true });
