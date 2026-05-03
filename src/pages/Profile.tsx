@@ -158,19 +158,39 @@ const Profile = () => {
           )}
         </GlassCard>
 
-        <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4">
-          {badgeCatalog.map((badge) => {
-            const unlocked = badge.test(badgeState);
-            return (
-              <GlassCard key={badge.name} className={unlocked ? "border-success/40" : "opacity-60"}>
-                <badge.icon className={unlocked ? "h-6 w-6 text-success" : "h-6 w-6 text-muted-foreground"} />
-                <h3 className="font-display font-semibold mt-4">{badge.name}</h3>
-                <p className="text-xs text-muted-foreground mt-1">{badge.detail}</p>
-                <div className="mt-4 text-[11px] font-mono text-secondary">{unlocked ? "UNLOCKED" : "LOCKED"}</div>
-              </GlassCard>
-            );
-          })}
-        </div>
+        <GlassCard>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-display text-2xl font-semibold">Badges</h2>
+            <span className="text-xs font-mono text-muted-foreground">
+              {badgeCatalog.filter((b) => b.test(badgeState)).length} / {badgeCatalog.length}
+            </span>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+            {badgeCatalog.map((badge) => {
+              const unlocked = badge.test(badgeState);
+              return (
+                <div
+                  key={badge.name}
+                  className={`group relative rounded-lg border p-3 text-center transition-all ${
+                    unlocked
+                      ? "border-success/40 bg-success/5"
+                      : "border-border/60 bg-muted/20 opacity-60"
+                  }`}
+                  title={badge.detail}
+                >
+                  <badge.icon
+                    className={`h-6 w-6 mx-auto ${
+                      unlocked ? "text-success" : "text-muted-foreground"
+                    }`}
+                  />
+                  <div className="mt-2 text-xs font-medium font-display leading-tight line-clamp-2">
+                    {badge.name}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </GlassCard>
       </div>
     </AppLayout>
   );
