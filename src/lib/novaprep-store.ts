@@ -287,6 +287,19 @@ export const useNova = create<NovaState>((set, get) => ({
     });
 
     if (profileRes.data) {
+      // Streak reset: if last session is older than 1 day, zero out streak
+      const lastSessionDate = (sessionsRes.data as SessionSummary[] | null)?.[0]?.created_at?.slice(0, 10);
+      const currentStreak = (profileRes.data as any).streak ?? 0;
+      if (currentStreak > 0) {
+        const todayMs = new Date(`${today}T00:00:00`).getTime();
+        const lastMs = lastSessionDate ? new Date(`${lastSessionDate}T00:00:00`).getTime() : null;
+        const diffDays = lastMs === null ? Infinity : Math.round((todayMs - lastMs) / 86400000);
+        if (diffDays > 1) {
+          const { data: zeroed } = await supabase
+            .from("profiles").update({ streak: 0 }).eq("id", userId).select().single();
+          if (zeroed) set({ profile: normalizeProfile(zeroed) });
+        }
+      }
       await get().syncBoxes();
       await get().pruneExpiredBoosts();
     }
