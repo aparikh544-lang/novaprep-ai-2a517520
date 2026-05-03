@@ -14,62 +14,46 @@ const formatTime = (seconds: number) => {
 };
 
 const Focus = () => {
-  const awardFocusXP = useNova((s) => s.awardFocusXP);
   const profile = useNova((s) => s.profile);
-  const [duration, setDuration] = useState(25 * 60);
-  const [remaining, setRemaining] = useState(25 * 60);
-  const [running, setRunning] = useState(false);
-  const [customMin, setCustomMin] = useState("25");
-  const intervalRef = useRef<number | null>(null);
-  const startedAtMin = useRef(0);
+  const focusTimer = useNova((s) => s.focusTimer);
+  const setFocusDuration = useNova((s) => s.setFocusDuration);
+  const startFocusTimer = useNova((s) => s.startFocusTimer);
+  const pauseFocusTimer = useNova((s) => s.pauseFocusTimer);
+  const resetFocusTimer = useNova((s) => s.resetFocusTimer);
+  const completeFocusTimer = useNova((s) => s.completeFocusTimer);
+  const [, force] = useState(0);
+  const [customMin, setCustomMin] = useState(String(Math.floor(focusTimer.duration / 60)));
+  const completingRef = useRef(false);
+
+  // Compute live remaining from store (so background tabs/other pages stay accurate)
+  const remaining = focusTimer.running && focusTimer.endsAt
+    ? Math.max(0, Math.round((focusTimer.endsAt - Date.now()) / 1000))
+    : focusTimer.remaining;
 
   useEffect(() => {
-    if (!running) return;
-    intervalRef.current = window.setInterval(() => {
-      setRemaining((r) => {
-        if (r <= 1) {
-          window.clearInterval(intervalRef.current!);
-          intervalRef.current = null;
-          setRunning(false);
-          finishSession();
-          return 0;
-        }
-        return r - 1;
-      });
-    }, 1000);
-    return () => {
-      if (intervalRef.current) window.clearInterval(intervalRef.current);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [running]);
+    if (!focusTimer.running) return;
+    const t = window.setInterval(() => force((n) => n + 1), 500);
+    return () => window.clearInterval(t);
+  }, [focusTimer.running]);
 
-  const finishSession = async () => {
-    const minutesFocused = startedAtMin.current - Math.ceil(remaining / 60);
-    const minutes = Math.max(1, minutesFocused || Math.floor(duration / 60));
-    const xp = await awardFocusXP(minutes);
-    toast({
-      title: "Focus session complete",
-      description: `+${xp} XP for ${minutes} focused minutes.`,
-    });
-  };
+  useEffect(() => {
+    if (focusTimer.running && remaining <= 0 && !completingRef.current) {
+      completingRef.current = true;
+      const minutes = Math.max(1, Math.floor(focusTimer.duration / 60));
+      completeFocusTimer().then((xp) => {
+        toast({
+          title: "Focus session complete",
+          description: `+${xp} XP for ${minutes} focused minutes.`,
+        });
+        completingRef.current = false;
+      });
+    }
+  }, [remaining, focusTimer.running, focusTimer.duration, completeFocusTimer]);
 
   const setPreset = (min: number) => {
-    if (running) return;
-    setDuration(min * 60);
-    setRemaining(min * 60);
-  };
-
-  const start = () => {
-    if (remaining <= 0) setRemaining(duration);
-    startedAtMin.current = Math.ceil((remaining > 0 ? remaining : duration) / 60);
-    setRunning(true);
-  };
-
-  const pause = () => setRunning(false);
-
-  const reset = () => {
-    setRunning(false);
-    setRemaining(duration);
+    if (focusTimer.running) return;
+    setFocusDuration(min * 60);
+    setCustomMin(String(min));
   };
 
   const applyCustom = () => {
@@ -77,7 +61,7 @@ const Focus = () => {
     setPreset(n);
   };
 
-  const pct = Math.round(((duration - remaining) / Math.max(1, duration)) * 100);
+  const pct = Math.round(((focusTimer.duration - remaining) / Math.max(1, focusTimer.duration)) * 100);
 
   return (
     <AppLayout>
@@ -86,7 +70,8 @@ const Focus = () => {
         <h1 className="font-display text-4xl font-bold mt-1">Focus Timer</h1>
         <p className="text-muted-foreground mt-2 max-w-2xl">
           Pomodoro-style timer. Earn <span className="text-secondary font-medium">3 XP per minute</span>{" "}
-          you stay focused. Total focus time logged: {profile?.focus_minutes_total ?? 0} minutes.
+          you stay focused. The timer keeps running even if you switch tabs or pages. Total focus time
+          logged: {profile?.focus_minutes_total ?? 0} minutes.
         </p>
       </div>
 
@@ -118,29 +103,29 @@ const Focus = () => {
                 {formatTime(remaining)}
               </span>
               <span className="text-xs uppercase tracking-widest text-muted-foreground mt-2">
-                {running ? "Focusing" : remaining === 0 ? "Done" : "Ready"}
+                {focusTimer.running ? "Focusing" : remaining === 0 ? "Done" : "Ready"}
               </span>
             </div>
           </div>
 
           <div className="mt-8 flex gap-3">
-            {!running ? (
+            {!focusTimer.running ? (
               <button
-                onClick={start}
+                onClick={startFocusTimer}
                 className="inline-flex items-center gap-2 rounded-lg bg-primary px-6 py-3 text-sm font-semibold text-primary-foreground"
               >
                 <Play className="h-4 w-4" /> Start
               </button>
             ) : (
               <button
-                onClick={pause}
+                onClick={pauseFocusTimer}
                 className="inline-flex items-center gap-2 rounded-lg bg-secondary px-6 py-3 text-sm font-semibold text-secondary-foreground"
               >
                 <Pause className="h-4 w-4" /> Pause
               </button>
             )}
             <button
-              onClick={reset}
+              onClick={resetFocusTimer}
               className="inline-flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-6 py-3 text-sm font-medium"
             >
               <RotateCcw className="h-4 w-4" /> Reset
@@ -158,9 +143,9 @@ const Focus = () => {
                 <button
                   key={m}
                   onClick={() => setPreset(m)}
-                  disabled={running}
+                  disabled={focusTimer.running}
                   className={`rounded-lg border px-3 py-3 text-sm font-medium transition-colors ${
-                    duration === m * 60
+                    focusTimer.duration === m * 60
                       ? "border-primary/50 bg-primary/15 text-primary-glow"
                       : "border-border bg-muted/40 hover:bg-muted"
                   } disabled:opacity-50`}
@@ -184,7 +169,7 @@ const Focus = () => {
                 />
                 <button
                   onClick={applyCustom}
-                  disabled={running}
+                  disabled={focusTimer.running}
                   className="rounded-lg bg-secondary px-4 py-2 text-sm font-medium text-secondary-foreground disabled:opacity-50"
                 >
                   Set

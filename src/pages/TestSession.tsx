@@ -92,10 +92,10 @@ const TestSession = () => {
     if (current) setTimeByQuestion((prev) => ({ ...prev, [current.id]: (prev[current.id] ?? 0) + elapsed }));
   };
 
-  const prepareQuestions = (qs: Question[], targetModule: 1 | 2): Question[] => qs.map((question, index): Question => ({
+  const prepareQuestions = (qs: Question[], _targetModule: 1 | 2): Question[] => qs.map((question): Question => ({
     ...question,
-    responseType: question.section === "Math" && index % 4 === 3 ? "spr" : "multiple-choice",
-    choices: question.section === "Math" && index % 4 === 3 ? question.choices : question.choices,
+    // Trust the AI's responseType — don't force every 4th math question to SPR.
+    responseType: question.responseType === "spr" ? "spr" : "multiple-choice",
     explanation: cleanExplanation(question.explanation),
   }));
 
@@ -207,9 +207,11 @@ const TestSession = () => {
     if (taskLabel && dayLabel) await markTaskComplete({ taskKey: taskCompletionKey(dayLabel, taskLabel), taskLabel, dayLabel });
   };
 
+  const [submitting, setSubmitting] = useState(false);
   const proceedSubmit = async () => {
+    if (submitting) return;
+    setSubmitting(true);
     stampTime();
-    setReviewing(false);
     const result = await gradeCurrentModule();
     if (m === "full" && module === 1) {
       const harder = result.correct / questions.length >= 0.6;
@@ -221,9 +223,13 @@ const TestSession = () => {
       setTimeByQuestion({});
       setSessionTime(0);
       await loadQuestions(harder ? "harder" : "easier", 2);
+      setReviewing(false);
+      setSubmitting(false);
       return;
     }
     await finishSession(result.correct, questions.length, result.gained);
+    setSubmitting(false);
+    setReviewing(false);
   };
 
   if (loading) {
@@ -259,7 +265,14 @@ const TestSession = () => {
             You answered <span className="text-foreground font-semibold">{correct + completed.correct}</span> of {questions.length + completed.total} correctly in <span className="font-mono">{fmtTime(sessionTime + completed.seconds)}</span>.
           </p>
           <div className="mt-4 text-xs text-secondary">+{xpEarned + completed.xp} XP · Mistakes routed to your Vault</div>
-          <button onClick={() => nav("/")} className="mt-6 w-full px-4 py-3 rounded-lg bg-gradient-to-r from-primary to-secondary text-primary-foreground font-semibold">Return to Mission Control</button>
+          {m === "math" ? (
+            <div className="mt-6 grid gap-2">
+              <button onClick={() => nav("/test/reading")} className="w-full px-4 py-3 rounded-lg bg-gradient-to-r from-primary to-secondary text-primary-foreground font-semibold">Continue to Reading & Writing</button>
+              <button onClick={() => nav("/")} className="w-full px-4 py-2.5 rounded-lg border border-border bg-muted/30 text-sm">Back to dashboard</button>
+            </div>
+          ) : (
+            <button onClick={() => nav("/")} className="mt-6 w-full px-4 py-3 rounded-lg bg-gradient-to-r from-primary to-secondary text-primary-foreground font-semibold">Return to Mission Control</button>
+          )}
         </div>
       </div>
     );
@@ -291,8 +304,8 @@ const TestSession = () => {
               })}
             </div>
             <div className="mt-6 flex flex-col sm:flex-row gap-3 sm:justify-end">
-              <button onClick={() => setReviewing(false)} className="px-5 py-2.5 rounded-lg border border-border bg-muted/30 text-sm font-medium">Go back</button>
-              <button onClick={proceedSubmit} className="px-5 py-2.5 rounded-lg bg-gradient-to-r from-primary to-secondary text-primary-foreground text-sm font-semibold">Proceed to turn it in</button>
+              <button onClick={() => setReviewing(false)} disabled={submitting} className="px-5 py-2.5 rounded-lg border border-border bg-muted/30 text-sm font-medium disabled:opacity-50">Go back</button>
+              <button onClick={proceedSubmit} disabled={submitting} className="px-5 py-2.5 rounded-lg bg-gradient-to-r from-primary to-secondary text-primary-foreground text-sm font-semibold disabled:opacity-60">{submitting ? "Submitting…" : "Proceed to turn it in"}</button>
             </div>
           </div>
         </div>

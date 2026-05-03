@@ -57,7 +57,7 @@ const Dashboard = () => {
             <Flame className="h-3.5 w-3.5 text-warning" />
             Streak
           </div>
-          <div className="mt-2 font-display text-3xl font-bold">{streak}d</div>
+          <div className="mt-2 font-display text-3xl font-bold">{streak}</div>
         </GlassCard>
         <GlassCard className="!p-5">
           <div className="flex items-center gap-2 text-xs uppercase tracking-widest text-muted-foreground">

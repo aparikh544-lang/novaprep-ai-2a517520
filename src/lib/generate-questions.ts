@@ -26,7 +26,8 @@ export async function generateQuestions(opts: GenerateOptions): Promise<Question
   const raw = (data as any)?.questions ?? [];
   return raw.map((q: any, i: number): Question => {
     const section = q.section === "Math" ? "Math" : "Reading & Writing";
-    const responseType = q.responseType ?? q.response_type ?? (section === "Math" && i % 4 === 3 ? "spr" : "multiple-choice");
+    const rawType = q.responseType ?? q.response_type;
+    const responseType = rawType === "spr" ? "spr" : "multiple-choice";
     const choices = Array.isArray(q.choices) && q.choices.length === 4 ? q.choices.map(clean) : ["", "", "", ""];
     const correct = Number.isInteger(q.correct) ? q.correct : 0;
     return {

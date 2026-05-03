@@ -83,6 +83,13 @@ export interface StoreItem {
   minutes?: number;
 }
 
+export interface FocusTimerState {
+  duration: number; // seconds
+  endsAt: number | null; // epoch ms when timer should end (null = paused)
+  remaining: number; // last known remaining seconds (for paused state)
+  running: boolean;
+}
+
 interface NovaState {
   profile: Profile | null;
   mistakes: MistakeRecord[];
@@ -90,6 +97,12 @@ interface NovaState {
   taskCompletions: TaskCompletion[];
   mysteryBoxes: MysteryBox[];
   loading: boolean;
+  focusTimer: FocusTimerState;
+  setFocusDuration: (seconds: number) => void;
+  startFocusTimer: () => void;
+  pauseFocusTimer: () => void;
+  resetFocusTimer: () => void;
+  completeFocusTimer: () => Promise<number>;
   loadAll: (userId: string) => Promise<void>;
   updateProfile: (patch: Partial<Pick<Profile, "display_name" | "target_score" | "test_date">>) => Promise<void>;
   markTaskComplete: (task: { taskKey: string; taskLabel: string; dayLabel: string }) => Promise<void>;
@@ -189,6 +202,26 @@ const inventoryFromReward = (reward: BoxReward): InventoryItem | null => {
   return null;
 };
 
+const FOCUS_KEY = "novaprep:focus-timer";
+const loadFocus = (): FocusTimerState => {
+  if (typeof window === "undefined") return { duration: 25 * 60, endsAt: null, remaining: 25 * 60, running: false };
+  try {
+    const raw = window.localStorage.getItem(FOCUS_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw) as FocusTimerState;
+      if (parsed.running && parsed.endsAt) {
+        const left = Math.max(0, Math.round((parsed.endsAt - Date.now()) / 1000));
+        return { ...parsed, remaining: left, running: left > 0 };
+      }
+      return parsed;
+    }
+  } catch {}
+  return { duration: 25 * 60, endsAt: null, remaining: 25 * 60, running: false };
+};
+const saveFocus = (f: FocusTimerState) => {
+  try { window.localStorage.setItem(FOCUS_KEY, JSON.stringify(f)); } catch {}
+};
+
 export const useNova = create<NovaState>((set, get) => ({
   profile: null,
   mistakes: [],
@@ -196,6 +229,42 @@ export const useNova = create<NovaState>((set, get) => ({
   taskCompletions: [],
   mysteryBoxes: [],
   loading: false,
+  focusTimer: loadFocus(),
+
+  setFocusDuration: (seconds) => {
+    const f: FocusTimerState = { duration: seconds, endsAt: null, remaining: seconds, running: false };
+    saveFocus(f);
+    set({ focusTimer: f });
+  },
+  startFocusTimer: () => {
+    const cur = get().focusTimer;
+    const remaining = cur.remaining > 0 ? cur.remaining : cur.duration;
+    const f: FocusTimerState = { ...cur, remaining, endsAt: Date.now() + remaining * 1000, running: true };
+    saveFocus(f);
+    set({ focusTimer: f });
+  },
+  pauseFocusTimer: () => {
+    const cur = get().focusTimer;
+    const remaining = cur.endsAt ? Math.max(0, Math.round((cur.endsAt - Date.now()) / 1000)) : cur.remaining;
+    const f: FocusTimerState = { ...cur, remaining, endsAt: null, running: false };
+    saveFocus(f);
+    set({ focusTimer: f });
+  },
+  resetFocusTimer: () => {
+    const cur = get().focusTimer;
+    const f: FocusTimerState = { duration: cur.duration, endsAt: null, remaining: cur.duration, running: false };
+    saveFocus(f);
+    set({ focusTimer: f });
+  },
+  completeFocusTimer: async () => {
+    const cur = get().focusTimer;
+    const minutes = Math.max(1, Math.floor(cur.duration / 60));
+    const xp = await get().awardFocusXP(minutes);
+    const f: FocusTimerState = { duration: cur.duration, endsAt: null, remaining: 0, running: false };
+    saveFocus(f);
+    set({ focusTimer: f });
+    return xp;
+  },
 
   loadAll: async (userId) => {
     set({ loading: true });
@@ -218,6 +287,19 @@ export const useNova = create<NovaState>((set, get) => ({
     });
 
     if (profileRes.data) {
+      // Streak reset: if last session is older than 1 day, zero out streak
+      const lastSessionDate = (sessionsRes.data as SessionSummary[] | null)?.[0]?.created_at?.slice(0, 10);
+      const currentStreak = (profileRes.data as any).streak ?? 0;
+      if (currentStreak > 0) {
+        const todayMs = new Date(`${today}T00:00:00`).getTime();
+        const lastMs = lastSessionDate ? new Date(`${lastSessionDate}T00:00:00`).getTime() : null;
+        const diffDays = lastMs === null ? Infinity : Math.round((todayMs - lastMs) / 86400000);
+        if (diffDays > 1) {
+          const { data: zeroed } = await supabase
+            .from("profiles").update({ streak: 0 }).eq("id", userId).select().single();
+          if (zeroed) set({ profile: normalizeProfile(zeroed) });
+        }
+      }
       await get().syncBoxes();
       await get().pruneExpiredBoosts();
     }
