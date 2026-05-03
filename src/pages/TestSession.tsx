@@ -297,8 +297,8 @@ const TestSession = () => {
               })}
             </div>
             <div className="mt-6 flex flex-col sm:flex-row gap-3 sm:justify-end">
-              <button onClick={() => setReviewing(false)} className="px-5 py-2.5 rounded-lg border border-border bg-muted/30 text-sm font-medium">Go back</button>
-              <button onClick={proceedSubmit} className="px-5 py-2.5 rounded-lg bg-gradient-to-r from-primary to-secondary text-primary-foreground text-sm font-semibold">Proceed to turn it in</button>
+              <button onClick={() => setReviewing(false)} disabled={submitting} className="px-5 py-2.5 rounded-lg border border-border bg-muted/30 text-sm font-medium disabled:opacity-50">Go back</button>
+              <button onClick={proceedSubmit} disabled={submitting} className="px-5 py-2.5 rounded-lg bg-gradient-to-r from-primary to-secondary text-primary-foreground text-sm font-semibold disabled:opacity-60">{submitting ? "Submitting…" : "Proceed to turn it in"}</button>
             </div>
           </div>
         </div>
