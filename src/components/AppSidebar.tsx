@@ -54,7 +54,7 @@ export function AppSidebar() {
       : Math.min(100, ((xp - info.floor) / (info.ceiling - info.floor)) * 100);
 
   return (
-    <aside className="hidden md:flex w-64 shrink-0 flex-col bg-sidebar/60 backdrop-blur-xl border-r border-sidebar-border relative z-10">
+    <aside className="hidden md:flex w-64 shrink-0 flex-col bg-sidebar/60 backdrop-blur-xl border-r border-sidebar-border relative z-10 sticky top-0 h-screen self-start">
       <div className="px-6 pt-6 pb-8">
         <div className="flex items-center gap-2.5">
           <div className="relative h-9 w-9 rounded-xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center shadow-[var(--glow-purple)]">
