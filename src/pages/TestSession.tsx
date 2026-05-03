@@ -92,10 +92,10 @@ const TestSession = () => {
     if (current) setTimeByQuestion((prev) => ({ ...prev, [current.id]: (prev[current.id] ?? 0) + elapsed }));
   };
 
-  const prepareQuestions = (qs: Question[], targetModule: 1 | 2): Question[] => qs.map((question, index): Question => ({
+  const prepareQuestions = (qs: Question[], _targetModule: 1 | 2): Question[] => qs.map((question): Question => ({
     ...question,
-    responseType: question.section === "Math" && index % 4 === 3 ? "spr" : "multiple-choice",
-    choices: question.section === "Math" && index % 4 === 3 ? question.choices : question.choices,
+    // Trust the AI's responseType — don't force every 4th math question to SPR.
+    responseType: question.responseType === "spr" ? "spr" : "multiple-choice",
     explanation: cleanExplanation(question.explanation),
   }));
 
