@@ -83,6 +83,13 @@ export interface StoreItem {
   minutes?: number;
 }
 
+export interface FocusTimerState {
+  duration: number; // seconds
+  endsAt: number | null; // epoch ms when timer should end (null = paused)
+  remaining: number; // last known remaining seconds (for paused state)
+  running: boolean;
+}
+
 interface NovaState {
   profile: Profile | null;
   mistakes: MistakeRecord[];
@@ -90,6 +97,12 @@ interface NovaState {
   taskCompletions: TaskCompletion[];
   mysteryBoxes: MysteryBox[];
   loading: boolean;
+  focusTimer: FocusTimerState;
+  setFocusDuration: (seconds: number) => void;
+  startFocusTimer: () => void;
+  pauseFocusTimer: () => void;
+  resetFocusTimer: () => void;
+  completeFocusTimer: () => Promise<number>;
   loadAll: (userId: string) => Promise<void>;
   updateProfile: (patch: Partial<Pick<Profile, "display_name" | "target_score" | "test_date">>) => Promise<void>;
   markTaskComplete: (task: { taskKey: string; taskLabel: string; dayLabel: string }) => Promise<void>;
