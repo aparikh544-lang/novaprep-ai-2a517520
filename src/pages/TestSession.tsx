@@ -265,7 +265,14 @@ const TestSession = () => {
             You answered <span className="text-foreground font-semibold">{correct + completed.correct}</span> of {questions.length + completed.total} correctly in <span className="font-mono">{fmtTime(sessionTime + completed.seconds)}</span>.
           </p>
           <div className="mt-4 text-xs text-secondary">+{xpEarned + completed.xp} XP · Mistakes routed to your Vault</div>
-          <button onClick={() => nav("/")} className="mt-6 w-full px-4 py-3 rounded-lg bg-gradient-to-r from-primary to-secondary text-primary-foreground font-semibold">Return to Mission Control</button>
+          {m === "math" ? (
+            <div className="mt-6 grid gap-2">
+              <button onClick={() => nav("/test/reading")} className="w-full px-4 py-3 rounded-lg bg-gradient-to-r from-primary to-secondary text-primary-foreground font-semibold">Continue to Reading & Writing</button>
+              <button onClick={() => nav("/")} className="w-full px-4 py-2.5 rounded-lg border border-border bg-muted/30 text-sm">Back to dashboard</button>
+            </div>
+          ) : (
+            <button onClick={() => nav("/")} className="mt-6 w-full px-4 py-3 rounded-lg bg-gradient-to-r from-primary to-secondary text-primary-foreground font-semibold">Return to Mission Control</button>
+          )}
         </div>
       </div>
     );
