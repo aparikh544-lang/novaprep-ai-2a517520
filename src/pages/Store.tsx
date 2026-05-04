@@ -71,6 +71,28 @@ const items: (StoreItem & { icon: any; tagline: string; tier: "common" | "rare" 
     tagline: "Currency multiplier",
     tier: "rare",
   },
+  {
+    id: "streak_freeze_7d",
+    kind: "streak_freeze",
+    label: "Streak Shield · 7 days",
+    description: "Week-long insurance — your streak survives any missed day.",
+    cost: 200,
+    minutes: 60 * 24 * 7,
+    icon: Snowflake,
+    tagline: "Long-term insurance",
+    tier: "epic",
+  },
+  {
+    id: "skip_token_day",
+    kind: "skip_token",
+    label: "Skip Pass · 24h",
+    description: "Skip up to one hard question per drill for a full day, no penalty.",
+    cost: 90,
+    minutes: 60 * 24,
+    icon: Forward,
+    tagline: "Tactical pass",
+    tier: "rare",
+  },
 ];
 
 const tierStyle: Record<string, string> = {

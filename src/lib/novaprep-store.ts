@@ -572,18 +572,9 @@ export const useNova = create<NovaState>((set, get) => ({
     const baseXP = xpForDifficulty(difficulty);
     const mult = xpMultiplierFromBoosts(profile.active_boosts);
     const gained = baseXP * mult;
-    const newXP = profile.xp + gained;
-    const { data } = await supabase
-      .from("profiles")
-      .update({ xp: newXP, streak: Math.max(1, profile.streak || 0) })
-      .eq("id", profile.id)
-      .select()
-      .single();
-
-    if (data) {
-      set({ profile: normalizeProfile(data) });
-      await get().syncBoxes();
-    }
+    // Optimistic local update — DB sync deferred to recordSession to avoid
+    // dozens of round-trips when a drill is graded in bulk.
+    set({ profile: { ...profile, xp: profile.xp + gained, streak: Math.max(1, profile.streak || 0) } });
     return gained;
   },
 
@@ -619,7 +610,7 @@ export const useNova = create<NovaState>((set, get) => ({
 
     const { data: updatedProfile } = await supabase
       .from("profiles")
-      .update({ streak: nextStreak })
+      .update({ streak: nextStreak, xp: profile.xp })
       .eq("id", profile.id)
       .select()
       .single();

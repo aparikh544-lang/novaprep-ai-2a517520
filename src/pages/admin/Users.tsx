@@ -101,7 +101,7 @@ const AdminUsers = () => {
                 <TableRow key={u.user_id}>
                   <TableCell className="font-medium">{u.display_name || "—"}</TableCell>
                   <TableCell>{u.xp.toLocaleString()}</TableCell>
-                  <TableCell>{u.streak}d</TableCell>
+                  <TableCell>{u.streak}</TableCell>
                   <TableCell>{fmtHours(u.focus_minutes_total)}</TableCell>
                   <TableCell>{u.login_count}</TableCell>
                   <TableCell className="text-muted-foreground">{fmtDate(u.last_login_at)}</TableCell>
