@@ -1,4 +1,6 @@
 // Edge function: generate original SAT-style practice questions via Lovable AI Gateway
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
@@ -22,6 +24,9 @@ const TOPICS_RW = [
   "Grammar: Punctuation",
 ];
 
+// Per-user daily generation cap (each call counts as 1, regardless of question count)
+const DAILY_CALL_CAP = 40;
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -31,7 +36,33 @@ Deno.serve(async (req) => {
       .catch(() => ({}));
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
+    const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
+
+    // ------- Per-user daily cap -------
+    const authHeader = req.headers.get("Authorization") ?? "";
+    const jwt = authHeader.replace(/^Bearer\s+/i, "");
+    if (jwt && SUPABASE_URL && SERVICE_KEY) {
+      const admin = createClient(SUPABASE_URL, SERVICE_KEY);
+      const { data: userData } = await admin.auth.getUser(jwt);
+      const uid = userData?.user?.id;
+      if (uid) {
+        const { data: bumped, error: bumpErr } = await admin.rpc("bump_ai_usage", {
+          _user_id: uid,
+          _amount: 1,
+        });
+        if (!bumpErr && typeof bumped === "number" && bumped > DAILY_CALL_CAP) {
+          return new Response(
+            JSON.stringify({
+              error:
+                "Daily AI generation limit reached. Try again tomorrow — this cap keeps free AI credits available for everyone.",
+            }),
+            { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+          );
+        }
+      }
+    }
 
     let sectionInstruction = "";
     if (section === "Math") sectionInstruction = "Section must be exactly 'Math'.";
@@ -46,7 +77,7 @@ Deno.serve(async (req) => {
     else if (difficultyBias === "easier") diffInstruction = "Skew difficulty toward 'easy' and 'medium'.";
     else diffInstruction = "Mix easy/medium/hard.";
 
-    const systemPrompt = `You are an expert SAT tutor creating ORIGINAL SAT-level practice questions only. Never create below-SAT difficulty items, never copy from official material, and never reveal hidden reasoning, chain-of-thought, self-reflection, or internal notes. Topics for Math: ${TOPICS_MATH.join(", ")}. Topics for Reading & Writing: ${TOPICS_RW.join(", ")}. Reading questions must include a short original passage (40-90 words). Reading & Writing questions must be multiple-choice (responseType="multiple-choice"). Math questions should be about 75% multiple-choice and 25% student-produced response (responseType="spr"); SPR items still include 4 plausible choices for storage but MUST also include a concise correctText answer. CRITICAL: every question must be self-contained, unambiguous, grammatical, and clearly answerable from the prompt and (if present) the passage alone — never reference figures, charts, images, or external context. Use plain text only: write fractions as a/b, exponents as x^2, square roots as sqrt(x). Do NOT use LaTeX, markdown, dollar signs, or backslash commands like \\frac or \\sqrt. Double-check that exactly one choice is correct and matches the indicated correct index. Explanations: 1-2 sentences, student-facing, final only.`;
+    const systemPrompt = `You are an expert SAT tutor creating ORIGINAL SAT-level practice questions only. Never create below-SAT difficulty items, never copy from official material, and never reveal hidden reasoning, chain-of-thought, self-reflection, or internal notes. Topics for Math: ${TOPICS_MATH.join(", ")}. Topics for Reading & Writing: ${TOPICS_RW.join(", ")}. Reading questions must include a short original passage (40-90 words). Reading & Writing questions must be multiple-choice (responseType="multiple-choice"). Math questions should be about 75% multiple-choice and 25% student-produced response (responseType="spr"); SPR items still include 4 plausible choices for storage but MUST also include a concise correctText answer. CRITICAL CLARITY RULES: every question must be 100% self-contained, unambiguous, grammatical, and answerable from the prompt and (if present) the passage alone. Never reference figures, charts, images, tables, or external context. Never ask the student to "select all that apply" — exactly one of the four choices must be correct. If the prompt asks for a numeric answer, the four choices must be distinct numbers; if it asks for a word/phrase, choices must be distinct words/phrases. Re-read each question and confirm a typical SAT student would understand exactly what is being asked. Use plain text only: write fractions as a/b, exponents as x^2, square roots as sqrt(x). Do NOT use LaTeX, markdown, dollar signs, or backslash commands like \\frac or \\sqrt. Double-check that exactly one choice is correct and matches the indicated correct index. Explanations: 1-2 sentences, student-facing, final only.`;
 
     const topicInstruction = topic ? `Focus every question on this skill/topic: ${topic}.` : "Vary topics.";
     const userPrompt = `Generate ${count} original SAT-style questions. ${sectionInstruction} ${diffInstruction} ${topicInstruction} Keep every question at authentic SAT rigor and crystal clear. Use actual newline characters for multi-line math or passages, never escaped literal \\n text. Return only polished final questions through the tool. Set responseType correctly for each item, and the rendered UI will show choices for "multiple-choice" and a text input for "spr".`;
@@ -58,7 +89,7 @@ Deno.serve(async (req) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
+        model: "google/gemini-2.5-pro",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },
