@@ -14,6 +14,27 @@ export type Database = {
   }
   public: {
     Tables: {
+      ai_usage: {
+        Row: {
+          count: number
+          updated_at: string
+          used_on: string
+          user_id: string
+        }
+        Insert: {
+          count?: number
+          updated_at?: string
+          used_on?: string
+          user_id: string
+        }
+        Update: {
+          count?: number
+          updated_at?: string
+          used_on?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       mistakes: {
         Row: {
           choices: Json
@@ -331,6 +352,10 @@ export type Database = {
           user_id: string
           xp: number
         }[]
+      }
+      bump_ai_usage: {
+        Args: { _amount?: number; _user_id: string }
+        Returns: number
       }
       has_role: {
         Args: {
