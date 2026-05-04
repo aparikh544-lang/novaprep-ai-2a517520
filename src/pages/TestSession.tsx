@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { Clock, Flag, X, ChevronRight, Rocket, Loader2, AlertTriangle } from "lucide-react";
+import { Clock, Flag, X, ChevronRight, Rocket, Loader2, AlertTriangle, Coffee, CheckCircle2, XCircle } from "lucide-react";
 import { Question, ErrorReason } from "@/lib/novaprep-data";
 import { useNova } from "@/lib/novaprep-store";
 import { generateQuestions } from "@/lib/generate-questions";
@@ -29,10 +29,26 @@ function fmtTime(s: number) {
 
 const MODULE_SIZE: Record<Mode, number> = { full: 54, reading: 27, math: 22, redemption: 12, review: 10 };
 const MODULE_LIMIT: Record<Mode, number> = { full: 64 * 60, reading: 32 * 60, math: 35 * 60, redemption: 18 * 60, review: 15 * 60 };
+const BREAK_KEY = "novaprep:sat-break-endsAt";
+const BREAK_SECONDS = 10 * 60;
 
 const textLines = (text: string) => sanitizeMath(text).split("\n");
 const renderText = (text: string) => textLines(text).map((line, i, arr) => <span key={i}>{line}{i < arr.length - 1 && <br />}</span>);
 const normalizeSPR = (value: AnswerValue | undefined) => String(value ?? "").trim().toLowerCase().replace(/\s+/g, "");
+
+// Shuffle choices in-place: returns a new question with permuted choices and remapped correct index.
+const shuffleChoices = (q: Question): Question => {
+  if (q.responseType === "spr") return q;
+  const order = q.choices.map((_, i) => i);
+  for (let i = order.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [order[i], order[j]] = [order[j], order[i]];
+  }
+  const newChoices = order.map((i) => q.choices[i]);
+  const newCorrect = order.indexOf(q.correct);
+  return { ...q, choices: newChoices, correct: newCorrect };
+};
+
 const isCorrectAnswer = (q: Question, answer: AnswerValue | undefined) => {
   if (answer === undefined) return false;
   if (q.responseType === "spr") return normalizeSPR(answer) === normalizeSPR(q.correctText ?? q.choices[q.correct]);
@@ -70,6 +86,11 @@ const TestSession = () => {
   const [xpEarned, setXpEarned] = useState(0);
   const [completed, setCompleted] = useState({ correct: 0, total: 0, seconds: 0, xp: 0 });
   const [exitOpen, setExitOpen] = useState(false);
+  const [breakEndsAt, setBreakEndsAt] = useState<number | null>(null);
+  const [breakTick, setBreakTick] = useState(0);
+  const [submitting, setSubmitting] = useState(false);
+  // Answer key: snapshot of all module-2 / final-module questions + chosen answers
+  const [answerKey, setAnswerKey] = useState<{ questions: Question[]; answers: Record<string, AnswerValue> } | null>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const currentLimit = m === "full" ? (module === 1 ? 64 * 60 : 70 * 60) : MODULE_LIMIT[m];
   const exerciseName =
@@ -81,7 +102,7 @@ const TestSession = () => {
 
   const cleanExplanation = (text: string) =>
     text
-      .replace(/<think>[\s\S]*?<\/think>/gi, "")
+      .replace(/<tool_call>[\s\S]*?<\/think>/gi, "")
       .replace(/(^|\n)\s*(reasoning|chain of thought|internal thinking)\s*:[\s\S]*/gi, "")
       .replace(/\\n/g, "\n")
       .trim();
@@ -92,9 +113,8 @@ const TestSession = () => {
     if (current) setTimeByQuestion((prev) => ({ ...prev, [current.id]: (prev[current.id] ?? 0) + elapsed }));
   };
 
-  const prepareQuestions = (qs: Question[], _targetModule: 1 | 2): Question[] => qs.map((question): Question => ({
+  const prepareQuestions = (qs: Question[]): Question[] => qs.map((question): Question => shuffleChoices({
     ...question,
-    // Trust the AI's responseType — don't force every 4th math question to SPR.
     responseType: question.responseType === "spr" ? "spr" : "multiple-choice",
     explanation: cleanExplanation(question.explanation),
   }));
@@ -106,7 +126,7 @@ const TestSession = () => {
         const reviewSource = requestedTopic
           ? mistakes.filter((mi) => mi.topic.toLowerCase() === requestedTopic.toLowerCase())
           : mistakes;
-        setQuestions((reviewSource.length ? reviewSource : mistakes).slice(0, MODULE_SIZE.review).map((mi, i): Question => ({
+        setQuestions(prepareQuestions((reviewSource.length ? reviewSource : mistakes).slice(0, MODULE_SIZE.review).map((mi, i): Question => ({
           id: `redo:${mi.id}:${i}`,
           section: mi.section as any,
           topic: mi.topic,
@@ -118,7 +138,7 @@ const TestSession = () => {
           responseType: "multiple-choice",
           correctText: mi.choices[mi.correct_index],
           explanation: cleanExplanation(mi.explanation ?? ""),
-        })));
+        }))));
       } else {
         const fullSection = targetModule === 1 ? "Reading & Writing" : "Math";
         const modeTopic = requestedTopic && requestedTopic !== "Mixed SAT Skills" ? requestedTopic : undefined;
@@ -129,7 +149,7 @@ const TestSession = () => {
           topic: m === "redemption" ? weakTopic : modeTopic,
           section: m === "full" ? fullSection : undefined,
         });
-        setQuestions(prepareQuestions(qs, targetModule as 1 | 2));
+        setQuestions(prepareQuestions(qs));
       }
     } catch (e: any) {
       toast({ title: "Question generation failed", description: e.message ?? "Please try again", variant: "destructive" });
@@ -144,6 +164,32 @@ const TestSession = () => {
     loadQuestions("balanced");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [m]);
+
+  // Resume any in-progress between-module break that survives tab switches
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(BREAK_KEY);
+      if (raw) {
+        const t = Number(raw);
+        if (Number.isFinite(t) && t > Date.now()) setBreakEndsAt(t);
+        else localStorage.removeItem(BREAK_KEY);
+      }
+    } catch {}
+  }, []);
+
+  // Tick the break timer
+  useEffect(() => {
+    if (!breakEndsAt) return;
+    const t = window.setInterval(() => setBreakTick((n) => n + 1), 500);
+    return () => window.clearInterval(t);
+  }, [breakEndsAt]);
+
+  useEffect(() => {
+    if (breakEndsAt && Date.now() >= breakEndsAt) {
+      setBreakEndsAt(null);
+      try { localStorage.removeItem(BREAK_KEY); } catch {}
+    }
+  }, [breakTick, breakEndsAt]);
 
   useEffect(() => {
     const block = (e: Event) => e.preventDefault();
@@ -162,10 +208,10 @@ const TestSession = () => {
   }, [loading]);
 
   useEffect(() => {
-    if (done || loading || reviewing) return;
+    if (done || loading || reviewing || breakEndsAt) return;
     const t = setInterval(() => setSessionTime((s) => Math.min(s + 1, currentLimit)), 1000);
     return () => clearInterval(t);
-  }, [done, loading, reviewing, currentLimit]);
+  }, [done, loading, reviewing, currentLimit, breakEndsAt]);
 
   useEffect(() => {
     if (!loading && !done && sessionTime >= currentLimit) setReviewing(true);
@@ -178,58 +224,80 @@ const TestSession = () => {
   const gradeCurrentModule = async () => {
     let correct = 0;
     let gained = 0;
+    const tasks: Promise<any>[] = [];
     for (const qq of questions) {
       const answer = answers[qq.id];
       if (isCorrectAnswer(qq, answer)) {
         correct += 1;
         const sourceMistakeId = qq.id.startsWith("redo:") ? qq.id.split(":")[1] : null;
-        if (sourceMistakeId) await resolveMistake(sourceMistakeId);
+        if (sourceMistakeId) tasks.push(resolveMistake(sourceMistakeId));
+        // awardXP is now optimistic local-only — no DB round-trip
         gained += await awardXP(qq.difficulty);
       } else if (answer !== undefined) {
         const elapsed = timeByQuestion[qq.id] ?? Math.round(sessionTime / Math.max(1, questions.length));
         const reason: ErrorReason = elapsed > 90 ? "Time Pressure" : qq.section === "Reading & Writing" ? "Misreading" : "Concept Gap";
-        await recordMistake({ question: qq, userChoice: answerIndex(qq, answer), timeSpent: elapsed, reason });
+        tasks.push(recordMistake({ question: qq, userChoice: answerIndex(qq, answer), timeSpent: elapsed, reason }));
       }
     }
+    await Promise.allSettled(tasks);
     setXpEarned((x) => x + gained);
     return { correct, gained };
   };
 
   const finishSession = async (correct: number, total: number, gained: number) => {
+    // Snapshot for the answer key BEFORE marking done so the UI can render it.
+    setAnswerKey({ questions: [...questions], answers: { ...answers } });
     setDone(true);
-    await recordSession({
-      mode: m,
-      score: correct + completed.correct,
-      total: total + completed.total,
-      duration: sessionTime + completed.seconds,
-      xpEarned: xpEarned + completed.xp + gained,
-    });
-    if (taskLabel && dayLabel) await markTaskComplete({ taskKey: taskCompletionKey(dayLabel, taskLabel), taskLabel, dayLabel });
+    try {
+      await recordSession({
+        mode: m,
+        score: correct + completed.correct,
+        total: total + completed.total,
+        duration: sessionTime + completed.seconds,
+        xpEarned: xpEarned + completed.xp + gained,
+      });
+      if (taskLabel && dayLabel) await markTaskComplete({ taskKey: taskCompletionKey(dayLabel, taskLabel), taskLabel, dayLabel });
+    } catch (err: any) {
+      // Don't bounce the user back on a sync hiccup — keep the results screen up.
+      console.error("recordSession failed", err);
+      toast({ title: "Saved locally", description: "Your session XP is in — sync will retry on reload.", variant: "destructive" });
+    }
   };
 
-  const [submitting, setSubmitting] = useState(false);
   const proceedSubmit = async () => {
     if (submitting) return;
     setSubmitting(true);
-    stampTime();
-    const result = await gradeCurrentModule();
-    if (m === "full" && module === 1) {
-      const harder = result.correct / questions.length >= 0.6;
-      setCompleted({ correct: result.correct, total: questions.length, seconds: sessionTime, xp: result.gained });
-      setModule(2);
-      setIdx(0);
-      setAnswers({});
-      setFlagged(new Set());
-      setTimeByQuestion({});
-      setSessionTime(0);
-      await loadQuestions(harder ? "harder" : "easier", 2);
+    try {
+      stampTime();
+      const result = await gradeCurrentModule();
+      if (m === "full" && module === 1) {
+        const harder = result.correct / Math.max(1, questions.length) >= 0.6;
+        setCompleted({ correct: result.correct, total: questions.length, seconds: sessionTime, xp: result.gained });
+        // Start the 10-minute break
+        const ends = Date.now() + BREAK_SECONDS * 1000;
+        try { localStorage.setItem(BREAK_KEY, String(ends)); } catch {}
+        setBreakEndsAt(ends);
+        setReviewing(false);
+        // Pre-load module 2 in the background while user is on break
+        setModule(2);
+        setIdx(0);
+        setAnswers({});
+        setFlagged(new Set());
+        setTimeByQuestion({});
+        setSessionTime(0);
+        await loadQuestions(harder ? "harder" : "easier", 2);
+        return;
+      }
+      await finishSession(result.correct, questions.length, result.gained);
       setReviewing(false);
+    } finally {
       setSubmitting(false);
-      return;
     }
-    await finishSession(result.correct, questions.length, result.gained);
-    setSubmitting(false);
-    setReviewing(false);
+  };
+
+  const skipBreak = () => {
+    setBreakEndsAt(null);
+    try { localStorage.removeItem(BREAK_KEY); } catch {}
   };
 
   if (loading) {
@@ -238,45 +306,115 @@ const TestSession = () => {
         <div className="starfield" />
         <div className="relative z-10 flex flex-col items-center gap-4">
           <Loader2 className="h-8 w-8 text-secondary animate-spin" />
-          <div className="text-sm text-muted-foreground font-mono">Generating original questions…</div>
+          <div className="text-sm text-muted-foreground font-mono">Generating unique questions…</div>
+        </div>
+      </div>
+    );
+  }
+
+  // Between-module break screen
+  if (breakEndsAt) {
+    const left = Math.max(0, Math.round((breakEndsAt - Date.now()) / 1000));
+    return (
+      <div className="min-h-screen flex items-center justify-center p-6 relative">
+        <div className="starfield" />
+        <div className="glass glass-cyan p-10 max-w-md w-full text-center relative z-10">
+          <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-secondary to-primary flex items-center justify-center mx-auto mb-4">
+            <Coffee className="h-7 w-7 text-primary-foreground" />
+          </div>
+          <h2 className="font-display text-3xl font-bold">10-Minute Break</h2>
+          <p className="text-muted-foreground text-sm mt-2">
+            Stretch, hydrate, reset. Math module starts when the timer hits zero — even if you switch tabs.
+          </p>
+          <div className="mt-6 font-display text-6xl font-bold tabular-nums">{fmtTime(left)}</div>
+          <button onClick={skipBreak} className="mt-6 px-5 py-2.5 rounded-lg border border-border bg-muted/30 text-sm font-medium">
+            Skip break and start Math now
+          </button>
         </div>
       </div>
     );
   }
 
   const q = questions[idx];
-  if (!q) return null;
-
-  const answered = answers[q.id] !== undefined && String(answers[q.id]).trim() !== "";
-  const answeredCount = questions.filter((qq) => answers[qq.id] !== undefined && String(answers[qq.id]).trim() !== "").length;
-  const moduleAction = m === "full" && module === 1 ? "Submit ELA Module" : m === "full" ? "Submit Test" : "Submit Drill";
 
   if (done) {
-    const correct = questions.filter((qq) => isCorrectAnswer(qq, answers[qq.id])).length;
+    const correct = (answerKey?.questions ?? questions).filter((qq) => isCorrectAnswer(qq, (answerKey?.answers ?? answers)[qq.id])).length;
+    const totalQ = (answerKey?.questions.length ?? questions.length) + completed.total;
+    const totalCorrect = correct + completed.correct;
     return (
-      <div className="min-h-screen flex items-center justify-center p-6 relative">
+      <div className="min-h-screen bg-background text-foreground relative">
         <div className="starfield" />
-        <div className="glass glass-purple p-10 max-w-md w-full text-center relative z-10 animate-scale-in">
-          <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center mx-auto mb-4 glow-purple">
-            <Rocket className="h-7 w-7 text-primary-foreground" />
-          </div>
-          <h2 className="font-display text-3xl font-bold">Mission Complete</h2>
-          <p className="text-muted-foreground mt-2 text-sm">
-            You answered <span className="text-foreground font-semibold">{correct + completed.correct}</span> of {questions.length + completed.total} correctly in <span className="font-mono">{fmtTime(sessionTime + completed.seconds)}</span>.
-          </p>
-          <div className="mt-4 text-xs text-secondary">+{xpEarned + completed.xp} XP · Mistakes routed to your Vault</div>
-          {m === "math" ? (
-            <div className="mt-6 grid gap-2">
-              <button onClick={() => nav("/test/reading")} className="w-full px-4 py-3 rounded-lg bg-gradient-to-r from-primary to-secondary text-primary-foreground font-semibold">Continue to Reading & Writing</button>
-              <button onClick={() => nav("/")} className="w-full px-4 py-2.5 rounded-lg border border-border bg-muted/30 text-sm">Back to dashboard</button>
+        <div className="relative z-10 max-w-3xl mx-auto px-5 py-10">
+          <div className="glass glass-purple p-8 text-center animate-scale-in">
+            <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center mx-auto mb-4 glow-purple">
+              <Rocket className="h-7 w-7 text-primary-foreground" />
             </div>
-          ) : (
-            <button onClick={() => nav("/")} className="mt-6 w-full px-4 py-3 rounded-lg bg-gradient-to-r from-primary to-secondary text-primary-foreground font-semibold">Return to Mission Control</button>
+            <h2 className="font-display text-3xl font-bold">Mission Complete</h2>
+            <p className="text-muted-foreground mt-2 text-sm">
+              You answered <span className="text-foreground font-semibold">{totalCorrect}</span> of {totalQ} correctly in <span className="font-mono">{fmtTime(sessionTime + completed.seconds)}</span>.
+            </p>
+            <div className="mt-3 text-xs text-secondary">+{xpEarned + completed.xp} XP · Mistakes routed to your Vault</div>
+            {m === "math" ? (
+              <div className="mt-6 grid gap-2">
+                <button onClick={() => nav("/test/reading")} className="w-full px-4 py-3 rounded-lg bg-gradient-to-r from-primary to-secondary text-primary-foreground font-semibold">Continue to Reading & Writing</button>
+                <button onClick={() => nav("/")} className="w-full px-4 py-2.5 rounded-lg border border-border bg-muted/30 text-sm">Back to dashboard</button>
+              </div>
+            ) : (
+              <button onClick={() => nav("/")} className="mt-6 inline-block w-full px-4 py-3 rounded-lg bg-gradient-to-r from-primary to-secondary text-primary-foreground font-semibold">Return to Mission Control</button>
+            )}
+          </div>
+
+          {/* Answer Key */}
+          {answerKey && (
+            <div className="mt-8">
+              <h3 className="font-display text-2xl font-semibold mb-3">Answer Key</h3>
+              <div className="space-y-3">
+                {answerKey.questions.map((qq, i) => {
+                  const ans = answerKey.answers[qq.id];
+                  const ok = isCorrectAnswer(qq, ans);
+                  const userText =
+                    qq.responseType === "spr"
+                      ? (ans !== undefined ? String(ans) : "—")
+                      : (typeof ans === "number" ? `${String.fromCharCode(65 + ans)}. ${qq.choices[ans]}` : "—");
+                  const correctText =
+                    qq.responseType === "spr"
+                      ? (qq.correctText ?? qq.choices[qq.correct])
+                      : `${String.fromCharCode(65 + qq.correct)}. ${qq.choices[qq.correct]}`;
+                  return (
+                    <div key={qq.id} className={`glass p-4 border ${ok ? "border-success/30" : "border-destructive/30"}`}>
+                      <div className="flex items-start gap-3">
+                        {ok ? <CheckCircle2 className="h-5 w-5 text-success shrink-0 mt-0.5" /> : <XCircle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />}
+                        <div className="flex-1 min-w-0">
+                          <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Q{i + 1} · {qq.topic} · <span className="capitalize">{qq.difficulty}</span></div>
+                          <div className="text-sm mt-1 font-medium">{renderText(qq.prompt)}</div>
+                          <div className="mt-2 grid sm:grid-cols-2 gap-2 text-xs">
+                            <div className={`rounded border px-2 py-1.5 ${ok ? "border-success/30 bg-success/5" : "border-destructive/30 bg-destructive/5"}`}>
+                              <span className="text-muted-foreground">Your answer: </span>{userText}
+                            </div>
+                            <div className="rounded border border-success/30 bg-success/5 px-2 py-1.5">
+                              <span className="text-muted-foreground">Correct: </span>{correctText}
+                            </div>
+                          </div>
+                          {qq.explanation && (
+                            <p className="mt-2 text-xs text-muted-foreground">{qq.explanation}</p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           )}
         </div>
       </div>
     );
   }
+
+  if (!q) return null;
+  const answered = answers[q.id] !== undefined && String(answers[q.id]).trim() !== "";
+  const answeredCount = questions.filter((qq) => answers[qq.id] !== undefined && String(answers[qq.id]).trim() !== "").length;
+  const moduleAction = m === "full" && module === 1 ? "Submit ELA Module" : m === "full" ? "Submit Test" : "Submit Drill";
 
   if (reviewing) {
     return (
@@ -305,7 +443,10 @@ const TestSession = () => {
             </div>
             <div className="mt-6 flex flex-col sm:flex-row gap-3 sm:justify-end">
               <button onClick={() => setReviewing(false)} disabled={submitting} className="px-5 py-2.5 rounded-lg border border-border bg-muted/30 text-sm font-medium disabled:opacity-50">Go back</button>
-              <button onClick={proceedSubmit} disabled={submitting} className="px-5 py-2.5 rounded-lg bg-gradient-to-r from-primary to-secondary text-primary-foreground text-sm font-semibold disabled:opacity-60">{submitting ? "Submitting…" : "Proceed to turn it in"}</button>
+              <button onClick={proceedSubmit} disabled={submitting} className="px-5 py-2.5 rounded-lg bg-gradient-to-r from-primary to-secondary text-primary-foreground text-sm font-semibold disabled:opacity-60 inline-flex items-center gap-2">
+                {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
+                {submitting ? "Submitting…" : "Proceed to turn it in"}
+              </button>
             </div>
           </div>
         </div>
