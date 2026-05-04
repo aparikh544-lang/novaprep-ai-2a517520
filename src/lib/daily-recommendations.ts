@@ -28,7 +28,38 @@ const sectionForTopic = (topic: string): DailyTask["section"] => {
   return "Mixed";
 };
 
+// Cache today's routine in localStorage so completed tasks don't vanish when
+// underlying mistake counts change mid-day.
+const ROUTINE_KEY = "novaprep:daily-routine";
+const todayStr = () => new Date().toISOString().slice(0, 10);
+
+function loadCachedRoutine(): DailyRoutine | null {
+  try {
+    const raw = localStorage.getItem(ROUTINE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (parsed?.date === todayStr() && parsed?.routine) return parsed.routine as DailyRoutine;
+  } catch {}
+  return null;
+}
+function saveCachedRoutine(routine: DailyRoutine) {
+  try {
+    localStorage.setItem(ROUTINE_KEY, JSON.stringify({ date: todayStr(), routine }));
+  } catch {}
+}
+
 export function buildDailyRoutine(
+  mistakes: MistakeRecord[],
+  sessions: SessionSummary[],
+): DailyRoutine {
+  const cached = loadCachedRoutine();
+  if (cached) return cached;
+  const result = buildDailyRoutineInner(mistakes, sessions);
+  saveCachedRoutine(result);
+  return result;
+}
+
+function buildDailyRoutineInner(
   mistakes: MistakeRecord[],
   sessions: SessionSummary[],
 ): DailyRoutine {
