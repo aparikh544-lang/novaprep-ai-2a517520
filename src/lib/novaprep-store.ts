@@ -610,7 +610,7 @@ export const useNova = create<NovaState>((set, get) => ({
 
     const { data: updatedProfile } = await supabase
       .from("profiles")
-      .update({ streak: nextStreak })
+      .update({ streak: nextStreak, xp: profile.xp })
       .eq("id", profile.id)
       .select()
       .single();
