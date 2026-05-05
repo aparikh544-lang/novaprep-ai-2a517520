@@ -301,19 +301,8 @@ const TestSession = () => {
     try { localStorage.removeItem(BREAK_KEY); } catch {}
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center relative">
-        <div className="starfield" />
-        <div className="relative z-10 flex flex-col items-center gap-4">
-          <Loader2 className="h-8 w-8 text-secondary animate-spin" />
-          <div className="text-sm text-muted-foreground font-mono">Generating unique questions…</div>
-        </div>
-      </div>
-    );
-  }
-
-  // Between-module break screen
+  // Between-module break screen — render BEFORE the loading screen so the
+  // user sees the break first while module 2 generates in the background.
   if (breakEndsAt) {
     const left = Math.max(0, Math.round((breakEndsAt - Date.now()) / 1000));
     return (
@@ -328,9 +317,24 @@ const TestSession = () => {
             Stretch, hydrate, reset. Math module starts when the timer hits zero — even if you switch tabs.
           </p>
           <div className="mt-6 font-display text-6xl font-bold tabular-nums">{fmtTime(left)}</div>
-          <button onClick={skipBreak} className="mt-6 px-5 py-2.5 rounded-lg border border-border bg-muted/30 text-sm font-medium">
-            Skip break and start Math now
+          <div className="mt-3 text-[11px] uppercase tracking-widest text-muted-foreground">
+            {loading ? "Preparing math questions in the background…" : "Math questions ready"}
+          </div>
+          <button onClick={skipBreak} disabled={loading} className="mt-6 px-5 py-2.5 rounded-lg border border-border bg-muted/30 text-sm font-medium disabled:opacity-50">
+            {loading ? "Generating… please wait" : "Skip break and start Math now"}
           </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center relative">
+        <div className="starfield" />
+        <div className="relative z-10 flex flex-col items-center gap-4">
+          <Loader2 className="h-8 w-8 text-secondary animate-spin" />
+          <div className="text-sm text-muted-foreground font-mono">Generating unique questions…</div>
         </div>
       </div>
     );
