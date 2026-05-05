@@ -7,8 +7,6 @@ import { useNova } from "@/lib/novaprep-store";
 import { rankFromXP } from "@/lib/novaprep-data";
 import { deriveNovaStats } from "@/lib/novaprep-stats";
 import { toast } from "@/hooks/use-toast";
-import { useAuth } from "@/contexts/AuthContext";
-import { useIsAdmin } from "@/hooks/useIsAdmin";
 
 const badgeCatalog = [
   // Practice volume
