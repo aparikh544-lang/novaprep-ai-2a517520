@@ -50,8 +50,6 @@ const Profile = () => {
   const mistakes = useNova((s) => s.mistakes);
   const sessions = useNova((s) => s.sessions);
   const updateProfile = useNova((s) => s.updateProfile);
-  const { user } = useAuth();
-  const { isAdmin } = useIsAdmin();
   const xp = profile?.xp ?? 0;
   const rank = rankFromXP(xp);
   const pct = rank.ceiling === rank.floor ? 100 : Math.min(100, ((xp - rank.floor) / (rank.ceiling - rank.floor)) * 100);
