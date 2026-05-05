@@ -31,37 +31,55 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { mode = "full", count = 6, difficultyBias = "balanced", topic, section } = await req
-      .json()
-      .catch(() => ({}));
+    const body = await req.json().catch(() => ({}));
+    const rawCount = Number(body.count);
+    const count = Number.isFinite(rawCount) && rawCount > 0 ? Math.min(Math.floor(rawCount), 20) : 6;
+    const allowedModes = new Set(["full", "math", "reading", "redemption"]);
+    const mode = allowedModes.has(body.mode) ? body.mode : "full";
+    const allowedBias = new Set(["balanced", "easier", "harder"]);
+    const difficultyBias = allowedBias.has(body.difficultyBias) ? body.difficultyBias : "balanced";
+    const allowedSections = new Set(["Math", "Reading & Writing"]);
+    const section = allowedSections.has(body.section) ? body.section : undefined;
+    const topic = typeof body.topic === "string" ? body.topic.slice(0, 200) : undefined;
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
     const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
 
-    // ------- Per-user daily cap -------
+    // ------- Mandatory auth + per-user daily cap -------
     const authHeader = req.headers.get("Authorization") ?? "";
     const jwt = authHeader.replace(/^Bearer\s+/i, "");
-    if (jwt && SUPABASE_URL && SERVICE_KEY) {
-      const admin = createClient(SUPABASE_URL, SERVICE_KEY);
-      const { data: userData } = await admin.auth.getUser(jwt);
-      const uid = userData?.user?.id;
-      if (uid) {
-        const { data: bumped, error: bumpErr } = await admin.rpc("bump_ai_usage", {
-          _user_id: uid,
-          _amount: 1,
-        });
-        if (!bumpErr && typeof bumped === "number" && bumped > DAILY_CALL_CAP) {
-          return new Response(
-            JSON.stringify({
-              error:
-                "Daily AI generation limit reached. Try again tomorrow — this cap keeps free AI credits available for everyone.",
-            }),
-            { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-          );
-        }
-      }
+    if (!jwt || !SUPABASE_URL || !SERVICE_KEY) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const admin = createClient(SUPABASE_URL, SERVICE_KEY);
+    const { data: userData, error: authErr } = await admin.auth.getUser(jwt);
+    const uid = userData?.user?.id;
+    if (authErr || !uid) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const userClient = createClient(SUPABASE_URL, Deno.env.get("SUPABASE_ANON_KEY") ?? "", {
+      global: { headers: { Authorization: `Bearer ${jwt}` } },
+    });
+    const { data: bumped, error: bumpErr } = await userClient.rpc("bump_ai_usage", {
+      _user_id: uid,
+      _amount: 1,
+    });
+    if (!bumpErr && typeof bumped === "number" && bumped > DAILY_CALL_CAP) {
+      return new Response(
+        JSON.stringify({
+          error:
+            "Daily AI generation limit reached. Try again tomorrow — this cap keeps free AI credits available for everyone.",
+        }),
+        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
     }
 
     let sectionInstruction = "";
