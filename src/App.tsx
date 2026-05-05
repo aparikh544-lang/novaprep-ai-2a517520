@@ -21,7 +21,7 @@ import Profile from "./pages/Profile.tsx";
 import Boxes from "./pages/Boxes.tsx";
 import Store from "./pages/Store.tsx";
 import CoachArticle from "./pages/CoachArticle.tsx";
-import Focus from "./pages/Focus.tsx";
+import Articles from "./pages/Articles.tsx";
 import Inventory from "./pages/Inventory.tsx";
 import Help from "./pages/Help.tsx";
 import AdminUsers from "./pages/admin/Users.tsx";
@@ -43,7 +43,7 @@ const App = () => (
             <Route path="/" element={<RequireAuth><Index /></RequireAuth>} />
             <Route path="/practice" element={<RequireAuth><Practice /></RequireAuth>} />
             <Route path="/plan" element={<RequireAuth><DailyPlan /></RequireAuth>} />
-            <Route path="/focus" element={<RequireAuth><Focus /></RequireAuth>} />
+            <Route path="/articles" element={<RequireAuth><Articles /></RequireAuth>} />
             <Route path="/coach" element={<RequireAuth><AICoach /></RequireAuth>} />
             <Route path="/coach/:slug" element={<RequireAuth><CoachArticle /></RequireAuth>} />
             <Route path="/weak-areas" element={<RequireAuth><WeakAreas /></RequireAuth>} />

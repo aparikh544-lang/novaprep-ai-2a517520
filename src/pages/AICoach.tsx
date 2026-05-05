@@ -1,41 +1,26 @@
 import { useMemo } from "react";
-import { Sparkles, ChevronRight, BookOpen } from "lucide-react";
+import { Sparkles, ChevronRight, Target, Repeat } from "lucide-react";
 import { Link } from "react-router-dom";
 import { AppLayout } from "@/components/AppLayout";
 import { GlassCard } from "@/components/GlassCard";
 import { useNova } from "@/lib/novaprep-store";
-import { coachArticles } from "./CoachArticle";
 
-type CoachLesson = { topic: string; summary: string; duration: string; badge?: string; articleSlug?: string };
+const REINFORCE_TOPICS = [
+  "Quadratics",
+  "Linear Functions",
+  "Reading: Inference",
+  "Grammar: Punctuation",
+  "Data Analysis",
+  "Vocabulary in Context",
+];
 
 const AICoach = () => {
   const mistakes = useNova((s) => s.mistakes);
 
-  const lessons = useMemo<CoachLesson[]>(() => {
-    // Build lesson list from real weak topics; recommend the topic with the most mistakes.
+  const weakDrills = useMemo(() => {
     const counts = new Map<string, number>();
     for (const m of mistakes) counts.set(m.topic, (counts.get(m.topic) ?? 0) + 1);
-    const ranked = [...counts.entries()].sort((a, b) => b[1] - a[1]);
-
-    if (ranked.length === 0) {
-      return coachArticles.map((article, index) => ({
-        topic: article.title,
-        summary: article.summary,
-        duration: article.duration,
-        badge: index === 0 ? "Start here" : undefined,
-        articleSlug: article.slug,
-      }));
-    }
-
-    return [
-      ...ranked.slice(0, 4).map(([topic, count], i) => ({
-      topic,
-      summary: `You missed ${count} ${count === 1 ? "question" : "questions"} on this topic. The Coach will walk through the underlying concept and reasoning patterns.`,
-      duration: `${8 + Math.min(8, count * 2)} min`,
-      badge: i === 0 ? "Recommended" : undefined,
-    })),
-      ...coachArticles.slice(0, 3).map((article) => ({ topic: article.title, summary: article.summary, duration: article.duration, articleSlug: article.slug })),
-    ];
+    return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6);
   }, [mistakes]);
 
   const dominantReason = useMemo(() => {
@@ -48,10 +33,10 @@ const AICoach = () => {
     <AppLayout>
       <div className="mb-8">
         <span className="text-xs uppercase tracking-[0.25em] text-secondary">AI Coach</span>
-        <h1 className="font-display text-4xl font-bold mt-1">Guided Lessons</h1>
+        <h1 className="font-display text-4xl font-bold mt-1">Targeted Drill Recommendations</h1>
         <p className="text-muted-foreground mt-2 max-w-2xl">
-          Conceptual deep-dives generated for your weak spots. The Coach explains the
-          logic step-by-step — answers come last.
+          The Coach watches your mistakes and assembles drills focused on your weak concepts —
+          plus reinforcement drills so you don't forget what you've already learned.
         </p>
       </div>
 
@@ -64,46 +49,55 @@ const AICoach = () => {
             <h2 className="font-display text-xl font-semibold">Today's Coach Note</h2>
             <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
               {mistakes.length === 0 ? (
-                <>Run your first session and the Coach will start tailoring lessons to your weak spots.</>
+                <>Run your first session and the Coach will start tailoring drills to your weak spots.</>
               ) : (
                 <>
                   Your dominant error pattern is{" "}
                   <span className="text-foreground font-medium">{dominantReason[0]}</span> ({dominantReason[1]}{" "}
-                  occurrence{dominantReason[1] === 1 ? "" : "s"}). Start with the recommended lesson below.
+                  occurrence{dominantReason[1] === 1 ? "" : "s"}). Start with the top weak-area drill below.
                 </>
               )}
             </p>
-            <Link
-              to="/practice"
-              className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary-glow transition-colors"
-            >
-              Begin focused session <ChevronRight className="h-4 w-4" />
+            <Link to="/articles" className="mt-3 inline-flex items-center gap-1 text-sm text-secondary hover:text-secondary-glow">
+              Browse the article library <ChevronRight className="h-4 w-4" />
             </Link>
           </div>
         </div>
       </GlassCard>
 
+      <h2 className="font-display text-2xl font-semibold mb-3 flex items-center gap-2">
+        <Target className="h-5 w-5 text-primary" /> Drills for your weak concepts
+      </h2>
       <div className="grid md:grid-cols-2 gap-4">
-        {lessons.map((l, i) => (
-          <Link key={i} to={l.articleSlug ? `/coach/${l.articleSlug}` : `/test/redemption?topic=${encodeURIComponent(l.topic)}`} className="block">
-          <GlassCard className="group cursor-pointer hover:scale-[1.01] transition-transform h-full">
-            <div className="flex items-start justify-between">
-              <div className="flex items-center gap-2 text-secondary text-xs">
-                <BookOpen className="h-3.5 w-3.5" />
-                <span className="font-mono">{l.duration}</span>
+        {weakDrills.length === 0 ? (
+          <GlassCard><p className="text-sm text-muted-foreground">No weak areas yet — take a drill or full test to surface them.</p></GlassCard>
+        ) : weakDrills.map(([topic, count], i) => (
+          <Link key={topic} to={`/test/redemption?topic=${encodeURIComponent(topic)}`} className="block">
+            <GlassCard className="group cursor-pointer hover:scale-[1.01] transition-transform h-full">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-mono text-secondary">{count} miss{count === 1 ? "" : "es"}</span>
+                {i === 0 && <span className="text-[10px] uppercase tracking-widest px-2 py-0.5 rounded bg-primary/15 text-primary-glow border border-primary/30">Recommended</span>}
               </div>
-              {l.badge && (
-                <span className="text-[10px] uppercase tracking-widest px-2 py-0.5 rounded bg-primary/15 text-primary-glow border border-primary/30">
-                  {l.badge}
-                </span>
-              )}
-            </div>
-            <h3 className="font-display text-lg font-semibold mt-3">{l.topic}</h3>
-            <p className="text-sm text-muted-foreground mt-2">{l.summary}</p>
-            <div className="mt-4 flex items-center gap-1 text-sm text-secondary group-hover:text-secondary-glow">
-              {l.articleSlug ? "Read article" : "Begin lesson"} <ChevronRight className="h-4 w-4" />
-            </div>
-          </GlassCard>
+              <h3 className="font-display text-lg font-semibold mt-3">{topic}</h3>
+              <p className="text-sm text-muted-foreground mt-2">Targeted drill on this exact concept. Coach explanations after each question.</p>
+              <div className="mt-4 flex items-center gap-1 text-sm text-secondary group-hover:text-secondary-glow">Start drill <ChevronRight className="h-4 w-4" /></div>
+            </GlassCard>
+          </Link>
+        ))}
+      </div>
+
+      <h2 className="font-display text-2xl font-semibold mt-10 mb-3 flex items-center gap-2">
+        <Repeat className="h-5 w-5 text-secondary" /> Reinforcement drills
+      </h2>
+      <p className="text-sm text-muted-foreground mb-3 max-w-2xl">Spaced practice on concepts you've already worked on, so they stay sharp.</p>
+      <div className="grid md:grid-cols-3 gap-4">
+        {REINFORCE_TOPICS.map((topic) => (
+          <Link key={topic} to={`/test/redemption?topic=${encodeURIComponent(topic)}`} className="block">
+            <GlassCard className="group cursor-pointer hover:scale-[1.01] transition-transform h-full">
+              <h3 className="font-display text-base font-semibold">{topic}</h3>
+              <p className="text-xs text-muted-foreground mt-2">Quick reinforcement drill to keep this concept fresh.</p>
+              <div className="mt-3 flex items-center gap-1 text-xs text-secondary group-hover:text-secondary-glow">Practice <ChevronRight className="h-3.5 w-3.5" /></div>
+            </GlassCard>
           </Link>
         ))}
       </div>
