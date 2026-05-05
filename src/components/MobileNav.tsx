@@ -12,6 +12,7 @@ import {
   ShoppingBag,
   Backpack,
   Timer,
+  BookOpen,
   Rocket,
   HelpCircle,
   ShieldCheck,
