@@ -274,19 +274,20 @@ const TestSession = () => {
       if (m === "full" && module === 1) {
         const harder = result.correct / Math.max(1, questions.length) >= 0.6;
         setCompleted({ correct: result.correct, total: questions.length, seconds: sessionTime, xp: result.gained });
-        // Start the 10-minute break
+        // Start the 10-minute break IMMEDIATELY so the user sees it first
         const ends = Date.now() + BREAK_SECONDS * 1000;
         try { localStorage.setItem(BREAK_KEY, String(ends)); } catch {}
         setBreakEndsAt(ends);
         setReviewing(false);
-        // Pre-load module 2 in the background while user is on break
         setModule(2);
         setIdx(0);
         setAnswers({});
         setFlagged(new Set());
         setTimeByQuestion({});
         setSessionTime(0);
-        await loadQuestions(harder ? "harder" : "easier", 2);
+        // Fire-and-forget: load module 2 in background while user is on break.
+        // Loading screen will not show because the break screen takes precedence.
+        loadQuestions(harder ? "harder" : "easier", 2).catch(() => {});
         return;
       }
       await finishSession(result.correct, questions.length, result.gained);
