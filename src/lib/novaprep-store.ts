@@ -8,7 +8,17 @@ import {
   xpForDifficulty,
 } from "./novaprep-data";
 
-export type BoostKind = "xp_2x" | "xp_3x" | "sp_2x" | "streak_freeze" | "skip_token";
+export type BoostKind =
+  | "xp_2x"
+  | "xp_3x"
+  | "sp_2x"
+  | "streak_freeze"
+  | "skip_token"
+  | "hint"
+  | "fifty_fifty"
+  | "retry"
+  | "extra_life"
+  | "topic_radar";
 
 export interface InventoryItem {
   id: string; // uuid in JS
