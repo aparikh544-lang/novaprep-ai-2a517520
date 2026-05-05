@@ -33,7 +33,7 @@ Deno.serve(async (req) => {
   try {
     const body = await req.json().catch(() => ({}));
     const rawCount = Number(body.count);
-    const count = Number.isFinite(rawCount) && rawCount > 0 ? Math.min(Math.floor(rawCount), 20) : 6;
+    const count = Number.isFinite(rawCount) && rawCount > 0 ? Math.min(Math.floor(rawCount), 60) : 6;
     const allowedModes = new Set(["full", "math", "reading", "redemption"]);
     const mode = allowedModes.has(body.mode) ? body.mode : "full";
     const allowedBias = new Set(["balanced", "easier", "harder"]);
@@ -91,11 +91,11 @@ Deno.serve(async (req) => {
     else sectionInstruction = "Mix sections roughly evenly between 'Math' and 'Reading & Writing'.";
 
     let diffInstruction = "";
-    if (difficultyBias === "harder") diffInstruction = "Skew difficulty toward 'medium' and 'hard'.";
-    else if (difficultyBias === "easier") diffInstruction = "Skew difficulty toward 'easy' and 'medium'.";
-    else diffInstruction = "Mix easy/medium/hard.";
+    if (difficultyBias === "harder") diffInstruction = "Skew HEAVILY toward 'hard' (about 60% hard, 30% medium, 10% easy). Hard questions should require multi-step reasoning, hidden traps, or compound skills.";
+    else if (difficultyBias === "easier") diffInstruction = "Skew toward 'medium' with some 'easy'.";
+    else diffInstruction = "Use roughly 20% easy, 45% medium, 35% hard. ELA must include challenging inference and rhetorical synthesis items at real SAT difficulty — never trivially easy.";
 
-    const systemPrompt = `You are an expert SAT tutor creating ORIGINAL SAT-level practice questions only. Never create below-SAT difficulty items, never copy from official material, and never reveal hidden reasoning, chain-of-thought, self-reflection, or internal notes. Topics for Math: ${TOPICS_MATH.join(", ")}. Topics for Reading & Writing: ${TOPICS_RW.join(", ")}. Reading questions must include a short original passage (40-90 words). Reading & Writing questions must be multiple-choice (responseType="multiple-choice"). Math questions should be about 75% multiple-choice and 25% student-produced response (responseType="spr"); SPR items still include 4 plausible choices for storage but MUST also include a concise correctText answer. CRITICAL CLARITY RULES: every question must be 100% self-contained, unambiguous, grammatical, and answerable from the prompt and (if present) the passage alone. Never reference figures, charts, images, tables, or external context. Never ask the student to "select all that apply" — exactly one of the four choices must be correct. If the prompt asks for a numeric answer, the four choices must be distinct numbers; if it asks for a word/phrase, choices must be distinct words/phrases. Re-read each question and confirm a typical SAT student would understand exactly what is being asked. Use plain text only: write fractions as a/b, exponents as x^2, square roots as sqrt(x). Do NOT use LaTeX, markdown, dollar signs, or backslash commands like \\frac or \\sqrt. Double-check that exactly one choice is correct and matches the indicated correct index. Explanations: 1-2 sentences, student-facing, final only.`;
+    const systemPrompt = `You are an expert SAT tutor creating ORIGINAL SAT-level practice questions only. Never create below-SAT difficulty items, never copy from official material, and never reveal hidden reasoning, chain-of-thought, self-reflection, or internal notes. Topics for Math: ${TOPICS_MATH.join(", ")}. Topics for Reading & Writing: ${TOPICS_RW.join(", ")}. Reading questions must include a short original passage (40-90 words) at authentic SAT complexity (college-prep vocabulary, dense syntax, nuanced argument). Reading & Writing questions must be multiple-choice (responseType="multiple-choice"). Math questions MUST be exactly 75% multiple-choice and 25% student-produced response (responseType="spr"); SPR items still include 4 plausible choices for storage but MUST also include a concise correctText answer (a number, fraction like 3/4, or decimal). CRITICAL CLARITY RULES: every question must be 100% self-contained, unambiguous, grammatical, and answerable from the prompt and (if present) the passage alone. The prompt MUST end with a clear, explicit task sentence such as "What is the value of x?" or "Which choice best completes the text?" — never leave the student guessing what to find. Never reference figures, charts, images, tables, or external context. Never ask "select all that apply" — exactly one of the four choices must be correct. MATH NOTATION: use real Unicode symbols, NOT letters or LaTeX. Use √ for square root (e.g. √2, √(x+1)), ∛ for cube root, π for pi, ≤ ≥ ≠ ± ∞ ° θ Δ, superscripts ² ³ for small powers (e.g. x² + 3x − 4), · or × for multiplication, ÷ for division, fractions as a/b. Do NOT write "sqrt(", "pi", "<=", ">=", "!=", "\\frac", "\\sqrt", "$", or any backslash commands. ELA RIGOR: include real SAT-level vocabulary, multi-clause inference, evidence-pairing, and transitions where the wrong answers are highly plausible. Re-read each question and confirm a typical SAT student would understand exactly what is being asked. Double-check that exactly one choice is correct and matches the indicated correct index. Explanations: 1-2 sentences, student-facing, final only.`;
 
     const topicInstruction = topic ? `Focus every question on this skill/topic: ${topic}.` : "Vary topics.";
     const userPrompt = `Generate ${count} original SAT-style questions. ${sectionInstruction} ${diffInstruction} ${topicInstruction} Keep every question at authentic SAT rigor and crystal clear. Use actual newline characters for multi-line math or passages, never escaped literal \\n text. Return only polished final questions through the tool. Set responseType correctly for each item, and the rendered UI will show choices for "multiple-choice" and a text input for "spr".`;
@@ -107,7 +107,7 @@ Deno.serve(async (req) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+        model: "google/gemini-2.5-pro",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },

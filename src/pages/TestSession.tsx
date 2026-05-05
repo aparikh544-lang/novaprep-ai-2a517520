@@ -7,6 +7,7 @@ import { generateQuestions } from "@/lib/generate-questions";
 import { sanitizeMath } from "@/lib/sanitize-math";
 import { toast } from "@/hooks/use-toast";
 import { taskCompletionKey } from "@/lib/practice-links";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -27,8 +28,8 @@ function fmtTime(s: number) {
   return `${m}:${r.toString().padStart(2, "0")}`;
 }
 
-const MODULE_SIZE: Record<Mode, number> = { full: 54, reading: 27, math: 22, redemption: 12, review: 10 };
-const MODULE_LIMIT: Record<Mode, number> = { full: 64 * 60, reading: 32 * 60, math: 35 * 60, redemption: 18 * 60, review: 15 * 60 };
+const MODULE_SIZE: Record<Mode, number> = { full: 54, reading: 27, math: 44, redemption: 12, review: 10 };
+const MODULE_LIMIT: Record<Mode, number> = { full: 64 * 60, reading: 32 * 60, math: 70 * 60, redemption: 18 * 60, review: 15 * 60 };
 const BREAK_KEY = "novaprep:sat-break-endsAt";
 const BREAK_SECONDS = 10 * 60;
 
@@ -91,6 +92,8 @@ const TestSession = () => {
   const [submitting, setSubmitting] = useState(false);
   // Answer key: snapshot of all module-2 / final-module questions + chosen answers
   const [answerKey, setAnswerKey] = useState<{ questions: Question[]; answers: Record<string, AnswerValue> } | null>(null);
+  // For full SAT: also retain module-1 (ELA) questions + answers so the answer key has both sections
+  const [moduleOneSnapshot, setModuleOneSnapshot] = useState<{ questions: Question[]; answers: Record<string, AnswerValue> } | null>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const currentLimit = m === "full" ? (module === 1 ? 64 * 60 : 70 * 60) : MODULE_LIMIT[m];
   const exerciseName =
@@ -273,19 +276,21 @@ const TestSession = () => {
       if (m === "full" && module === 1) {
         const harder = result.correct / Math.max(1, questions.length) >= 0.6;
         setCompleted({ correct: result.correct, total: questions.length, seconds: sessionTime, xp: result.gained });
-        // Start the 10-minute break
+        setModuleOneSnapshot({ questions: [...questions], answers: { ...answers } });
+        // Start the 10-minute break IMMEDIATELY so the user sees it first
         const ends = Date.now() + BREAK_SECONDS * 1000;
         try { localStorage.setItem(BREAK_KEY, String(ends)); } catch {}
         setBreakEndsAt(ends);
         setReviewing(false);
-        // Pre-load module 2 in the background while user is on break
         setModule(2);
         setIdx(0);
         setAnswers({});
         setFlagged(new Set());
         setTimeByQuestion({});
         setSessionTime(0);
-        await loadQuestions(harder ? "harder" : "easier", 2);
+        // Fire-and-forget: load module 2 in background while user is on break.
+        // Loading screen will not show because the break screen takes precedence.
+        loadQuestions(harder ? "harder" : "easier", 2).catch(() => {});
         return;
       }
       await finishSession(result.correct, questions.length, result.gained);
@@ -300,19 +305,8 @@ const TestSession = () => {
     try { localStorage.removeItem(BREAK_KEY); } catch {}
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center relative">
-        <div className="starfield" />
-        <div className="relative z-10 flex flex-col items-center gap-4">
-          <Loader2 className="h-8 w-8 text-secondary animate-spin" />
-          <div className="text-sm text-muted-foreground font-mono">Generating unique questions…</div>
-        </div>
-      </div>
-    );
-  }
-
-  // Between-module break screen
+  // Between-module break screen — render BEFORE the loading screen so the
+  // user sees the break first while module 2 generates in the background.
   if (breakEndsAt) {
     const left = Math.max(0, Math.round((breakEndsAt - Date.now()) / 1000));
     return (
@@ -327,9 +321,24 @@ const TestSession = () => {
             Stretch, hydrate, reset. Math module starts when the timer hits zero — even if you switch tabs.
           </p>
           <div className="mt-6 font-display text-6xl font-bold tabular-nums">{fmtTime(left)}</div>
-          <button onClick={skipBreak} className="mt-6 px-5 py-2.5 rounded-lg border border-border bg-muted/30 text-sm font-medium">
-            Skip break and start Math now
+          <div className="mt-3 text-[11px] uppercase tracking-widest text-muted-foreground">
+            {loading ? "Preparing math questions in the background…" : "Math questions ready"}
+          </div>
+          <button onClick={skipBreak} disabled={loading} className="mt-6 px-5 py-2.5 rounded-lg border border-border bg-muted/30 text-sm font-medium disabled:opacity-50">
+            {loading ? "Generating… please wait" : "Skip break and start Math now"}
           </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center relative">
+        <div className="starfield" />
+        <div className="relative z-10 flex flex-col items-center gap-4">
+          <Loader2 className="h-8 w-8 text-secondary animate-spin" />
+          <div className="text-sm text-muted-foreground font-mono">Generating unique questions…</div>
         </div>
       </div>
     );
@@ -341,6 +350,63 @@ const TestSession = () => {
     const correct = (answerKey?.questions ?? questions).filter((qq) => isCorrectAnswer(qq, (answerKey?.answers ?? answers)[qq.id])).length;
     const totalQ = (answerKey?.questions.length ?? questions.length) + completed.total;
     const totalCorrect = correct + completed.correct;
+    // Build combined answer key: ELA from module-1 snapshot, Math from module-2 snapshot
+    const ela = moduleOneSnapshot?.questions ?? [];
+    const elaAns = moduleOneSnapshot?.answers ?? {};
+    const math = (answerKey?.questions ?? []).filter((qq) => qq.section === "Math");
+    const mathAns = answerKey?.answers ?? {};
+    // For non-full modes, just sort current snapshot into the right tab
+    const allQ = m === "full" ? [...ela, ...(answerKey?.questions ?? [])] : (answerKey?.questions ?? []);
+    const allAns = m === "full" ? { ...elaAns, ...mathAns } : (answerKey?.answers ?? {});
+    const elaList = allQ.filter((qq) => qq.section === "Reading & Writing");
+    const mathList = allQ.filter((qq) => qq.section === "Math");
+
+    // SAT-style score estimate (only meaningful for full simulation)
+    const accToScore = (correct: number, total: number) => {
+      if (total === 0) return 200;
+      const pct = correct / total;
+      // Map 0%→200, 100%→800 with a slight curve toward the middle
+      return Math.round(200 + Math.pow(pct, 0.95) * 600);
+    };
+    const elaCorrect = elaList.filter((qq) => isCorrectAnswer(qq, allAns[qq.id])).length;
+    const mathCorrect = mathList.filter((qq) => isCorrectAnswer(qq, allAns[qq.id])).length;
+    const elaScore = accToScore(elaCorrect, elaList.length);
+    const mathScore = accToScore(mathCorrect, mathList.length);
+    const satTotal = elaScore + mathScore;
+
+    const renderRow = (qq: Question, i: number) => {
+      const ans = allAns[qq.id];
+      const ok = isCorrectAnswer(qq, ans);
+      const userText =
+        qq.responseType === "spr"
+          ? (ans !== undefined ? String(ans) : "—")
+          : (typeof ans === "number" ? `${String.fromCharCode(65 + ans)}. ${qq.choices[ans]}` : "—");
+      const correctText =
+        qq.responseType === "spr"
+          ? (qq.correctText ?? qq.choices[qq.correct])
+          : `${String.fromCharCode(65 + qq.correct)}. ${qq.choices[qq.correct]}`;
+      return (
+        <div key={qq.id} className={`glass p-4 border ${ok ? "border-success/30" : "border-destructive/30"}`}>
+          <div className="flex items-start gap-3">
+            {ok ? <CheckCircle2 className="h-5 w-5 text-success shrink-0 mt-0.5" /> : <XCircle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />}
+            <div className="flex-1 min-w-0">
+              <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Q{i + 1} · {qq.topic} · <span className="capitalize">{qq.difficulty}</span></div>
+              <div className="text-sm mt-1 font-medium">{renderText(qq.prompt)}</div>
+              <div className="mt-2 grid sm:grid-cols-2 gap-2 text-xs">
+                <div className={`rounded border px-2 py-1.5 ${ok ? "border-success/30 bg-success/5" : "border-destructive/30 bg-destructive/5"}`}>
+                  <span className="text-muted-foreground">Your answer: </span>{userText}
+                </div>
+                <div className="rounded border border-success/30 bg-success/5 px-2 py-1.5">
+                  <span className="text-muted-foreground">Correct: </span>{correctText}
+                </div>
+              </div>
+              {qq.explanation && <p className="mt-2 text-xs text-muted-foreground">{qq.explanation}</p>}
+            </div>
+          </div>
+        </div>
+      );
+    };
+
     return (
       <div className="min-h-screen bg-background text-foreground relative">
         <div className="starfield" />
@@ -354,6 +420,27 @@ const TestSession = () => {
               You answered <span className="text-foreground font-semibold">{totalCorrect}</span> of {totalQ} correctly in <span className="font-mono">{fmtTime(sessionTime + completed.seconds)}</span>.
             </p>
             <div className="mt-3 text-xs text-secondary">+{xpEarned + completed.xp} XP · Mistakes routed to your Vault</div>
+
+            {m === "full" && (
+              <div className="mt-6 grid sm:grid-cols-3 gap-3 text-left">
+                <div className="rounded-lg border border-secondary/30 bg-secondary/5 p-4">
+                  <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Reading & Writing</div>
+                  <div className="font-display text-3xl font-bold mt-1">{elaScore}</div>
+                  <div className="text-[11px] text-muted-foreground mt-0.5">{elaCorrect} / {elaList.length} correct</div>
+                </div>
+                <div className="rounded-lg border border-secondary/30 bg-secondary/5 p-4">
+                  <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Math</div>
+                  <div className="font-display text-3xl font-bold mt-1">{mathScore}</div>
+                  <div className="text-[11px] text-muted-foreground mt-0.5">{mathCorrect} / {mathList.length} correct</div>
+                </div>
+                <div className="rounded-lg border border-primary/40 bg-gradient-to-br from-primary/15 to-secondary/15 p-4">
+                  <div className="text-[10px] uppercase tracking-widest text-secondary">Predicted SAT</div>
+                  <div className="font-display text-3xl font-bold mt-1">{satTotal}</div>
+                  <div className="text-[11px] text-muted-foreground mt-0.5">out of 1600</div>
+                </div>
+              </div>
+            )}
+
             {m === "math" ? (
               <div className="mt-6 grid gap-2">
                 <button onClick={() => nav("/test/reading")} className="w-full px-4 py-3 rounded-lg bg-gradient-to-r from-primary to-secondary text-primary-foreground font-semibold">Continue to Reading & Writing</button>
@@ -364,46 +451,26 @@ const TestSession = () => {
             )}
           </div>
 
-          {/* Answer Key */}
-          {answerKey && (
+          {/* Answer Key with Math / ELA tabs */}
+          {(elaList.length > 0 || mathList.length > 0) && (
             <div className="mt-8">
               <h3 className="font-display text-2xl font-semibold mb-3">Answer Key</h3>
-              <div className="space-y-3">
-                {answerKey.questions.map((qq, i) => {
-                  const ans = answerKey.answers[qq.id];
-                  const ok = isCorrectAnswer(qq, ans);
-                  const userText =
-                    qq.responseType === "spr"
-                      ? (ans !== undefined ? String(ans) : "—")
-                      : (typeof ans === "number" ? `${String.fromCharCode(65 + ans)}. ${qq.choices[ans]}` : "—");
-                  const correctText =
-                    qq.responseType === "spr"
-                      ? (qq.correctText ?? qq.choices[qq.correct])
-                      : `${String.fromCharCode(65 + qq.correct)}. ${qq.choices[qq.correct]}`;
-                  return (
-                    <div key={qq.id} className={`glass p-4 border ${ok ? "border-success/30" : "border-destructive/30"}`}>
-                      <div className="flex items-start gap-3">
-                        {ok ? <CheckCircle2 className="h-5 w-5 text-success shrink-0 mt-0.5" /> : <XCircle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />}
-                        <div className="flex-1 min-w-0">
-                          <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Q{i + 1} · {qq.topic} · <span className="capitalize">{qq.difficulty}</span></div>
-                          <div className="text-sm mt-1 font-medium">{renderText(qq.prompt)}</div>
-                          <div className="mt-2 grid sm:grid-cols-2 gap-2 text-xs">
-                            <div className={`rounded border px-2 py-1.5 ${ok ? "border-success/30 bg-success/5" : "border-destructive/30 bg-destructive/5"}`}>
-                              <span className="text-muted-foreground">Your answer: </span>{userText}
-                            </div>
-                            <div className="rounded border border-success/30 bg-success/5 px-2 py-1.5">
-                              <span className="text-muted-foreground">Correct: </span>{correctText}
-                            </div>
-                          </div>
-                          {qq.explanation && (
-                            <p className="mt-2 text-xs text-muted-foreground">{qq.explanation}</p>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+              <Tabs defaultValue={mathList.length >= elaList.length ? "math" : "ela"} className="w-full">
+                <TabsList className="grid grid-cols-2 w-full">
+                  <TabsTrigger value="math">Math ({mathList.length})</TabsTrigger>
+                  <TabsTrigger value="ela">ELA ({elaList.length})</TabsTrigger>
+                </TabsList>
+                <TabsContent value="math" className="mt-4 space-y-3">
+                  {mathList.length === 0 ? (
+                    <div className="text-sm text-muted-foreground">No math questions in this session.</div>
+                  ) : mathList.map((qq, i) => renderRow(qq, i))}
+                </TabsContent>
+                <TabsContent value="ela" className="mt-4 space-y-3">
+                  {elaList.length === 0 ? (
+                    <div className="text-sm text-muted-foreground">No ELA questions in this session.</div>
+                  ) : elaList.map((qq, i) => renderRow(qq, i))}
+                </TabsContent>
+              </Tabs>
             </div>
           )}
         </div>
