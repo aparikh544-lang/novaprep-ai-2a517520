@@ -146,12 +146,27 @@ export default function CoachArticle() {
               <p className="mt-3 text-base leading-8 text-foreground/85 whitespace-pre-line">{section.body}</p>
             </section>
           ))}
-          <section className="border-l border-secondary/30 pl-5 py-2">
-            <div className="flex items-center gap-2 text-xs uppercase tracking-widest text-secondary"><CheckCircle2 className="h-4 w-4" /> Practical drill</div>
-            <h2 className="font-display text-2xl font-semibold mt-2">Apply it this week</h2>
-            <p className="mt-3 text-base leading-8 text-foreground/85">Pick one habit from this article and run it through three short practice sets in the next 48 hours. After each set, write a single line answering: did this routine save me time, save me points, or both? If neither, swap it for a different routine and test that one. The point is not to memorize advice; it is to install one repeatable behavior at a time. Most score jumps come from three or four installed habits, not from learning every tip at once.</p>
-            <p className="mt-3 text-base leading-8 text-foreground/85">If a habit feels awkward at first, that means it has not been automated yet. Give it a full week of timed practice before deciding whether it works for you. Track your accuracy and pacing inside NovaPrep so you can see whether the routine is producing measurable change. Real preparation is small, deliberate, and repeated — exactly the opposite of cramming the night before. The students who improve most are the ones who turn advice into routine, then routine into instinct.</p>
-          </section>
+          {(() => {
+            const closings: Record<string, { title: string; body: string }> = {
+              "digital-sat-format": { title: "Why the format matters for your prep", body: "Knowing the structure changes how you study. Because Module 2 difficulty is locked in by Module 1, your first 27 (or 22) questions matter disproportionately — accuracy early is more valuable than speed late. Build that into your practice: treat the first half of every drill as your real performance window." },
+              "ela-question-types": { title: "How to use this list", body: "Don't try to master all eight types at once. Pick the two question types you miss most often in NovaPrep's analytics and drill them in isolation for a week. Familiar patterns become fast patterns, and fast patterns are what give you time for the dense inference items at the end." },
+              "math-domains": { title: "Where your time goes furthest", body: "Algebra and Advanced Math together are 70% of the math section. If your domain accuracy data shows weakness there, every hour invested returns more points than the same hour spent on geometry edge cases. Audit your last three drills and let the breakdown decide what to study next." },
+              "math-symbols-cheatsheet": { title: "Read symbols out loud", body: "When a question stalls you, slow down and read the notation aloud — 'x squared minus four over two' — instead of skimming. Most missed math questions are not algebra failures; they are misreads of a symbol the student rushed past. The cheatsheet only helps if you actually pause to use it." },
+              "comma-rules": { title: "Test the comma, don't memorize it", body: "Whenever a punctuation choice appears, mentally remove the words between the commas. If the sentence still reads cleanly, the commas were probably right; if the sentence breaks, the punctuation is wrong. Make that quick deletion test your default move on every Boundaries item." },
+              "quadratics-deep-dive": { title: "Match form to question", body: "Before solving anything, look at what the question is asking for and choose the form that exposes that answer directly. Asking for the vertex? Use vertex form. Asking for roots? Use factored form or the quadratic formula. The wrong form turns a 30-second problem into a 3-minute one." },
+              "linear-systems": { title: "One classification before you solve", body: "Train yourself to spot 'one solution / no solution / infinite solutions' before you start solving. Many SAT system problems ask exactly that, and a 5-second slope-and-intercept comparison answers it instantly — no substitution or elimination needed." },
+              "data-and-statistics": { title: "Always read the question stem twice", body: "Data questions are rarely hard arithmetic — they are reading puzzles disguised as math. The wrong answers usually correspond to using the wrong row total, the wrong column total, or the wrong unit. A 5-second re-read of the stem catches more errors here than a calculator ever will." },
+              "test-day-pacing": { title: "Practice pacing before content", body: "If you cannot finish a module in time, raw skill won't show up on your score. Spend at least one timed module per week solely on pacing — finish on time even if accuracy dips slightly — until the clock stops being the dominant variable. Then layer accuracy back on." },
+            };
+            const closing = closings[article.slug] ?? { title: "Where this fits in your prep", body: "Pick one specific takeaway from this article and apply it to your next NovaPrep drill. After the drill, look at the analytics page to see whether that change moved your accuracy or your time-per-question on the relevant question type. Adjust and repeat — that's how an article becomes a score." };
+            return (
+              <section className="border-l border-secondary/30 pl-5 py-2">
+                <div className="flex items-center gap-2 text-xs uppercase tracking-widest text-secondary"><CheckCircle2 className="h-4 w-4" /> Closing thought</div>
+                <h2 className="font-display text-2xl font-semibold mt-2">{closing.title}</h2>
+                <p className="mt-3 text-base leading-8 text-foreground/85">{closing.body}</p>
+              </section>
+            );
+          })()}
         </div>
       </article>
     </AppLayout>
