@@ -21,7 +21,7 @@ import Profile from "./pages/Profile.tsx";
 import Boxes from "./pages/Boxes.tsx";
 import Store from "./pages/Store.tsx";
 import CoachArticle from "./pages/CoachArticle.tsx";
-import Focus from "./pages/Focus.tsx";
+import Articles from "./pages/Articles.tsx";
 import Inventory from "./pages/Inventory.tsx";
 import Help from "./pages/Help.tsx";
 import AdminUsers from "./pages/admin/Users.tsx";
