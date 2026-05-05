@@ -33,7 +33,7 @@ Deno.serve(async (req) => {
   try {
     const body = await req.json().catch(() => ({}));
     const rawCount = Number(body.count);
-    const count = Number.isFinite(rawCount) && rawCount > 0 ? Math.min(Math.floor(rawCount), 20) : 6;
+    const count = Number.isFinite(rawCount) && rawCount > 0 ? Math.min(Math.floor(rawCount), 60) : 6;
     const allowedModes = new Set(["full", "math", "reading", "redemption"]);
     const mode = allowedModes.has(body.mode) ? body.mode : "full";
     const allowedBias = new Set(["balanced", "easier", "harder"]);
