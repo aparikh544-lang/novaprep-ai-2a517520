@@ -7,6 +7,7 @@ import { generateQuestions } from "@/lib/generate-questions";
 import { sanitizeMath } from "@/lib/sanitize-math";
 import { toast } from "@/hooks/use-toast";
 import { taskCompletionKey } from "@/lib/practice-links";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   AlertDialog,
   AlertDialogAction,
