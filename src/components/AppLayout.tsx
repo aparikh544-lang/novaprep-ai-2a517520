@@ -1,5 +1,5 @@
 import { ReactNode, useEffect, useState } from "react";
-import { Zap, Sparkles, Snowflake, Forward, Gem } from "lucide-react";
+import { Zap, Sparkles, Snowflake, Forward, Gem, Lightbulb, Eye, RefreshCw, Heart, Compass } from "lucide-react";
 import { AppSidebar } from "./AppSidebar";
 import { MobileNav } from "./MobileNav";
 import { useNova, BoostKind } from "@/lib/novaprep-store";
@@ -10,6 +10,11 @@ const iconFor: Record<BoostKind, any> = {
   sp_2x: Gem,
   streak_freeze: Snowflake,
   skip_token: Forward,
+  hint: Lightbulb,
+  fifty_fifty: Eye,
+  retry: RefreshCw,
+  extra_life: Heart,
+  topic_radar: Compass,
 };
 
 const formatRemaining = (expires: string) => {
