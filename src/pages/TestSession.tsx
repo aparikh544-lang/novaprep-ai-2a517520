@@ -276,6 +276,7 @@ const TestSession = () => {
       if (m === "full" && module === 1) {
         const harder = result.correct / Math.max(1, questions.length) >= 0.6;
         setCompleted({ correct: result.correct, total: questions.length, seconds: sessionTime, xp: result.gained });
+        setModuleOneSnapshot({ questions: [...questions], answers: { ...answers } });
         // Start the 10-minute break IMMEDIATELY so the user sees it first
         const ends = Date.now() + BREAK_SECONDS * 1000;
         try { localStorage.setItem(BREAK_KEY, String(ends)); } catch {}
