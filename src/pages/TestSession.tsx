@@ -92,6 +92,8 @@ const TestSession = () => {
   const [submitting, setSubmitting] = useState(false);
   // Answer key: snapshot of all module-2 / final-module questions + chosen answers
   const [answerKey, setAnswerKey] = useState<{ questions: Question[]; answers: Record<string, AnswerValue> } | null>(null);
+  // For full SAT: also retain module-1 (ELA) questions + answers so the answer key has both sections
+  const [moduleOneSnapshot, setModuleOneSnapshot] = useState<{ questions: Question[]; answers: Record<string, AnswerValue> } | null>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const currentLimit = m === "full" ? (module === 1 ? 64 * 60 : 70 * 60) : MODULE_LIMIT[m];
   const exerciseName =
