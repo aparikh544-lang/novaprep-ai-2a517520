@@ -91,13 +91,32 @@ const Boxes = () => {
             <div className={opening ? "absolute inset-0 bg-primary/20 animate-pulse" : ""} />
             <div className="relative z-10">
               <span className="text-xs uppercase tracking-[0.25em] text-secondary">Level {activeBox.level_number} Drop</span>
-              <div className={`mx-auto mt-6 flex h-44 w-44 items-center justify-center rounded-[2rem] border bg-gradient-to-br from-primary/25 to-secondary/25 ${opening ? "animate-[pulse_0.35s_ease-in-out_infinite] glow-purple" : "animate-float"}`}>
-                <Box className="h-24 w-24 text-secondary" />
-              </div>
-              <h2 className="mt-6 font-display text-3xl font-bold text-gradient-nebula">{tierLabels[activeBox.tier]} Drop</h2>
-              <p className="mt-2 text-sm text-muted-foreground">{Math.max(0, 3 - activeBox.upgrade_clicks_used)} upgrade taps left</p>
 
-              {lastReward ? (
+              <button
+                onClick={() => onTapBox(activeBox)}
+                disabled={opening || !!lastReward}
+                aria-label={activeBox.upgrade_clicks_used >= 3 ? "Tap to open" : "Tap to upgrade"}
+                className={`mx-auto mt-6 flex h-44 w-44 items-center justify-center rounded-[2rem] border bg-gradient-to-br from-primary/25 to-secondary/25 transition-transform active:scale-95 cursor-pointer ${opening ? "animate-[pulse_0.35s_ease-in-out_infinite] glow-purple" : upgradeFlash ? "glow-purple scale-110 ring-4 ring-primary/60" : "animate-float"}`}
+              >
+                <Box className={`h-24 w-24 ${upgradeFlash ? "text-primary-glow" : "text-secondary"}`} />
+              </button>
+
+              {upgradeFlash && (
+                <div className="mt-4 animate-scale-in inline-block rounded-full bg-primary/20 border border-primary/50 px-4 py-1.5 text-sm font-semibold text-primary-glow">
+                  ⬆ Upgraded to {tierLabels[upgradeFlash.to]}!
+                </div>
+              )}
+
+              <h2 className="mt-4 font-display text-3xl font-bold text-gradient-nebula">{tierLabels[activeBox.tier]} Drop</h2>
+              <p className="mt-2 text-sm text-muted-foreground">
+                {lastReward
+                  ? "Reward revealed!"
+                  : activeBox.upgrade_clicks_used >= 3
+                  ? "Tap the box to open it"
+                  : `Tap the box · ${3 - activeBox.upgrade_clicks_used} upgrade tap${3 - activeBox.upgrade_clicks_used === 1 ? "" : "s"} left`}
+              </p>
+
+              {lastReward && (
                 <div className="mt-6 animate-scale-in rounded-xl border border-success/30 bg-success/10 p-4">
                   {lastReward.type === "sp" ? <Gem className="mx-auto h-7 w-7 text-secondary" /> : <Zap className="mx-auto h-7 w-7 text-warning" />}
                   <div className="mt-2 font-display text-xl font-semibold">{lastReward.label}</div>
@@ -106,12 +125,8 @@ const Boxes = () => {
                   </p>
                   <button onClick={nextBox} className="mt-4 w-full rounded-lg bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground">{unopened.length > 1 ? "Next box" : "Done"}</button>
                 </div>
-              ) : (
-                <div className="mt-6 grid grid-cols-2 gap-2">
-                  <button onClick={() => onTap(activeBox)} disabled={activeBox.upgrade_clicks_used >= 3 || opening} className="rounded-lg border border-border bg-muted/40 px-4 py-3 text-sm font-medium disabled:opacity-50 inline-flex items-center justify-center gap-2"><Wand2 className="h-4 w-4" /> Tap</button>
-                  <button onClick={() => onOpen(activeBox)} disabled={opening} className="rounded-lg bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground disabled:opacity-50">Open</button>
-                </div>
               )}
+
               <button onClick={() => setActiveId(null)} className="mt-4 text-xs text-muted-foreground hover:text-foreground">Close</button>
             </div>
           </div>
