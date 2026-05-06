@@ -324,104 +324,45 @@ Deno.serve(async (req) => {
       );
     }
 
-    let sectionInstruction = "";
-    if (section === "Math") sectionInstruction = "Section must be exactly 'Math'.";
-    else if (section === "Reading & Writing") sectionInstruction = "Section must be exactly 'Reading & Writing'.";
-    else if (mode === "math") sectionInstruction = "Section must be exactly 'Math'.";
-    else if (mode === "reading") sectionInstruction = "Section must be exactly 'Reading & Writing'.";
-    else if (mode === "redemption") sectionInstruction = "Use the section that best fits the target topic.";
-    else sectionInstruction = "Mix sections roughly evenly between 'Math' and 'Reading & Writing'.";
-
-    let diffInstruction = "";
-    if (difficultyBias === "harder") diffInstruction = "Skew HEAVILY toward 'hard' (about 60% hard, 30% medium, 10% easy). Hard questions should require multi-step reasoning, hidden traps, or compound skills.";
-    else if (difficultyBias === "easier") diffInstruction = "Skew toward 'medium' with some 'easy'.";
-    else diffInstruction = "Use roughly 20% easy, 45% medium, 35% hard. ELA must include challenging inference and rhetorical synthesis items at real SAT difficulty — never trivially easy.";
-
-    const systemPrompt = `You are an expert SAT tutor creating ORIGINAL SAT-level practice questions only. Never create below-SAT difficulty items, never copy from official material, and never reveal hidden reasoning, chain-of-thought, self-reflection, or internal notes. Topics for Math: ${TOPICS_MATH.join(", ")}. Topics for Reading & Writing: ${TOPICS_RW.join(", ")}. Reading questions must include a short original passage (40-90 words) at authentic SAT complexity (college-prep vocabulary, dense syntax, nuanced argument). Reading & Writing questions must be multiple-choice (responseType="multiple-choice"). Math questions MUST be exactly 75% multiple-choice and 25% student-produced response (responseType="spr"); SPR items still include 4 plausible choices for storage but MUST also include a concise correctText answer (a number, fraction like 3/4, or decimal). CRITICAL CLARITY RULES: every question must be 100% self-contained, unambiguous, grammatical, and answerable from the prompt and (if present) the passage alone. The prompt MUST end with a clear, explicit task sentence such as "What is the value of x?" or "Which choice best completes the text?" — never leave the student guessing what to find. Never reference figures, charts, images, tables, or external context. Never ask "select all that apply" — exactly one of the four choices must be correct. MATH NOTATION: use real Unicode symbols, NOT letters or LaTeX. Use √ for square root (e.g. √2, √(x+1)), ∛ for cube root, π for pi, ≤ ≥ ≠ ± ∞ ° θ Δ, superscripts ² ³ for small powers (e.g. x² + 3x − 4), · or × for multiplication, ÷ for division, fractions as a/b. Do NOT write "sqrt(", "pi", "<=", ">=", "!=", "\\frac", "\\sqrt", "$", or any backslash commands. ELA RIGOR: include real SAT-level vocabulary, multi-clause inference, evidence-pairing, and transitions where the wrong answers are highly plausible. Re-read each question and confirm a typical SAT student would understand exactly what is being asked. Double-check that exactly one choice is correct and matches the indicated correct index. Explanations: 1-2 sentences, student-facing, final only.`;
-
-    const topicInstruction = topic ? `Focus every question on this skill/topic: ${topic}.` : "Vary topics.";
-    const userPrompt = `Generate ${count} original SAT-style questions. ${sectionInstruction} ${diffInstruction} ${topicInstruction} Keep every question at authentic SAT rigor and crystal clear. Use actual newline characters for multi-line math or passages, never escaped literal \\n text. Return only polished final questions through the tool. Set responseType correctly for each item, and the rendered UI will show choices for "multiple-choice" and a text input for "spr".`;
-
-    const aiResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-pro",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
-        ],
-        tools: [
-          {
-            type: "function",
-            function: {
-              name: "return_questions",
-              description: "Return the generated SAT practice questions.",
-              parameters: {
-                type: "object",
-                properties: {
-                  questions: {
-                    type: "array",
-                    items: {
-                      type: "object",
-                      properties: {
-                        section: { type: "string", enum: ["Math", "Reading & Writing"] },
-                        topic: { type: "string" },
-                        difficulty: { type: "string", enum: ["easy", "medium", "hard"] },
-                        passage: { type: "string", description: "Optional reading passage." },
-                        prompt: { type: "string" },
-                        choices: { type: "array", items: { type: "string" }, minItems: 4, maxItems: 4 },
-                        correct: { type: "integer", minimum: 0, maximum: 3 },
-                        responseType: { type: "string", enum: ["multiple-choice", "spr"] },
-                        correctText: { type: "string", description: "Required for student-produced Math responses." },
-                        explanation: { type: "string" },
-                      },
-                      required: ["section", "topic", "difficulty", "prompt", "choices", "correct", "responseType", "explanation"],
-                      additionalProperties: false,
-                    },
-                  },
-                },
-                required: ["questions"],
-                additionalProperties: false,
-              },
-            },
-          },
-        ],
-        tool_choice: { type: "function", function: { name: "return_questions" } },
-      }),
-    });
-
-    if (aiResp.status === 429) {
-      return new Response(
-        JSON.stringify({ error: "Rate limits exceeded, please try again shortly." }),
-        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
+    const effectiveSection: SectionName | undefined =
+      section ?? (mode === "math" ? "Math" : mode === "reading" ? "Reading & Writing" : undefined);
+    const batchSizes: number[] = [];
+    for (let remaining = count; remaining > 0; remaining -= BATCH_SIZE) {
+      batchSizes.push(Math.min(BATCH_SIZE, remaining));
     }
-    if (aiResp.status === 402) {
-      return new Response(
-        JSON.stringify({ error: "AI credits exhausted. Add funds in Settings → Workspace → Usage." }),
-        { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
-    }
-    if (!aiResp.ok) {
-      const t = await aiResp.text();
-      console.error("AI gateway error", aiResp.status, t);
-      return new Response(JSON.stringify({ error: "AI gateway error" }), {
+    const sprDistribution = effectiveSection === "Math" || mode === "math"
+      ? distributeMathSpr(count, batchSizes.length)
+      : batchSizes.map(() => 0);
+
+    const systemPrompt = buildSystemPrompt();
+    const batchQuestions = await Promise.all(
+      batchSizes.map((batchCount, batchIndex) =>
+        generateBatchWithFallback({
+          lovableApiKey: LOVABLE_API_KEY,
+          systemPrompt,
+          userPrompt: buildUserPrompt({
+            count: batchCount,
+            difficultyBias,
+            mode,
+            section: effectiveSection,
+            topic,
+            batchIndex,
+            batchCount: batchSizes.length,
+            sprCount: sprDistribution[batchIndex] ?? 0,
+          }),
+        })
+      )
+    );
+
+    const questions = batchQuestions.flat().slice(0, count);
+    if (!questions.length) {
+      return new Response(JSON.stringify({ error: "Question generation returned no questions." }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const data = await aiResp.json();
-    const toolCall = data.choices?.[0]?.message?.tool_calls?.[0];
-    const args = toolCall?.function?.arguments;
-    if (!args) throw new Error("No tool call returned");
-    const parsed = JSON.parse(args);
-
-    return new Response(JSON.stringify(parsed), {
+    return new Response(JSON.stringify({ questions }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
