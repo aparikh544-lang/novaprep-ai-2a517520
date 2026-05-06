@@ -30,11 +30,11 @@ const items = [
   { to: "/articles", label: "Articles", icon: BookOpen },
   { to: "/weak-areas", label: "Weak Areas", icon: TrendingDown },
   { to: "/analytics", label: "Analytics", icon: BarChart3 },
-  { to: "/profile", label: "Profile", icon: UserCircle },
   { to: "/inventory", label: "Rewards", icon: Backpack },
   { to: "/boxes", label: "Boxes", icon: Gift },
   { to: "/store", label: "Store", icon: ShoppingBag },
   { to: "/help", label: "Help", icon: HelpCircle },
+  { to: "/profile", label: "Profile", icon: UserCircle },
 ];
 
 const adminItems = [
