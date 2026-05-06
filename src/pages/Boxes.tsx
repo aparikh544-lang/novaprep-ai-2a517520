@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Gift, Sparkles, Star, Gem, Zap, Box, PartyPopper, Wand2 } from "lucide-react";
+import { Gift, Sparkles, Star, Gem, Zap, Box, PartyPopper } from "lucide-react";
 import { AppLayout } from "@/components/AppLayout";
 import { GlassCard } from "@/components/GlassCard";
 import { useNova, BoxReward, MysteryBox } from "@/lib/novaprep-store";
