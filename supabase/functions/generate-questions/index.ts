@@ -24,6 +24,248 @@ const TOPICS_RW = [
   "Grammar: Punctuation",
 ];
 
+const AI_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
+const BATCH_SIZE = 10;
+const BATCH_TIMEOUT_MS = 60_000;
+
+type DifficultyBias = "balanced" | "easier" | "harder";
+type SectionName = "Math" | "Reading & Writing";
+type ResponseType = "multiple-choice" | "spr";
+
+type GeneratedQuestion = {
+  section: SectionName;
+  topic: string;
+  difficulty: "easy" | "medium" | "hard";
+  passage?: string;
+  prompt: string;
+  choices: string[];
+  correct: number;
+  responseType: ResponseType;
+  correctText?: string;
+  explanation: string;
+};
+
+const responseFormatInstruction =
+  "Return only polished final questions through the tool. Use actual newline characters for multi-line math or passages, never escaped literal \\n text.";
+
+function buildSystemPrompt() {
+  return `You are an expert SAT tutor creating ORIGINAL SAT-level practice questions only. Never create below-SAT difficulty items, never copy from official material, and never reveal hidden reasoning, chain-of-thought, self-reflection, or internal notes. Topics for Math: ${TOPICS_MATH.join(", ")}. Topics for Reading & Writing: ${TOPICS_RW.join(", ")}. Reading questions must include a short original passage (40-90 words) at authentic SAT complexity (college-prep vocabulary, dense syntax, nuanced argument). Reading & Writing questions must be multiple-choice (responseType="multiple-choice"). Math questions use a mix of multiple-choice and student-produced response (responseType="spr"); every SPR item must also include a concise correctText answer (a number, fraction like 3/4, or decimal). CRITICAL CLARITY RULES: every question must be 100% self-contained, unambiguous, grammatical, and answerable from the prompt and (if present) the passage alone. The prompt MUST end with a clear, explicit task sentence such as "What is the value of x?" or "Which choice best completes the text?" — never leave the student guessing what to find. Never reference figures, charts, images, tables, or external context. Never ask "select all that apply" — exactly one of the four choices must be correct. MATH NOTATION: use real Unicode symbols, NOT letters or LaTeX. Use √ for square root (e.g. √2, √(x+1)), ∛ for cube root, π for pi, ≤ ≥ ≠ ± ∞ ° θ Δ, superscripts ² ³ for small powers (e.g. x² + 3x − 4), · or × for multiplication, ÷ for division, fractions as a/b. Do NOT write "sqrt(", "pi", "<=", ">=", "!=", "\\frac", "\\sqrt", "$", or any backslash commands. ELA RIGOR: include real SAT-level vocabulary, multi-clause inference, evidence-pairing, and transitions where the wrong answers are highly plausible. Re-read each question and confirm a typical SAT student would understand exactly what is being asked. Double-check that exactly one choice is correct and matches the indicated correct index. Explanations: 1-2 sentences, student-facing, final only.`;
+}
+
+function buildUserPrompt(opts: {
+  count: number;
+  difficultyBias: DifficultyBias;
+  mode: string;
+  section?: SectionName;
+  topic?: string;
+  batchIndex: number;
+  batchCount: number;
+  sprCount: number;
+}) {
+  const { count, difficultyBias, mode, section, topic, batchIndex, batchCount, sprCount } = opts;
+  let sectionInstruction = "Mix sections roughly evenly between 'Math' and 'Reading & Writing'.";
+  if (section === "Math") sectionInstruction = "Section must be exactly 'Math'.";
+  else if (section === "Reading & Writing") sectionInstruction = "Section must be exactly 'Reading & Writing'.";
+  else if (mode === "math") sectionInstruction = "Section must be exactly 'Math'.";
+  else if (mode === "reading") sectionInstruction = "Section must be exactly 'Reading & Writing'.";
+  else if (mode === "redemption") sectionInstruction = "Use the section that best fits the target topic.";
+
+  let diffInstruction = "Use roughly 20% easy, 45% medium, 35% hard. ELA must include challenging inference and rhetorical synthesis items at real SAT difficulty — never trivially easy.";
+  if (difficultyBias === "harder") diffInstruction = "Skew HEAVILY toward 'hard' (about 60% hard, 30% medium, 10% easy). Hard questions should require multi-step reasoning, hidden traps, or compound skills.";
+  else if (difficultyBias === "easier") diffInstruction = "Skew toward 'medium' with some 'easy'.";
+
+  const topicInstruction = topic ? `Focus every question on this skill/topic: ${topic}.` : "Vary topics across the allowed SAT skills.";
+  const mathMixInstruction = section === "Math" || mode === "math"
+    ? `For this batch, return exactly ${sprCount} student-produced response questions and exactly ${count - sprCount} multiple-choice questions.`
+    : "All questions in this batch must be multiple-choice.";
+
+  return `Generate ${count} original SAT-style questions for batch ${batchIndex + 1} of ${batchCount}. ${sectionInstruction} ${diffInstruction} ${topicInstruction} ${mathMixInstruction} Avoid repeating the same setup, wording, passage pattern, or answer pattern within this batch or across batches. Make the topics, numbers, rhetorical situations, and distractor logic feel meaningfully different from one another. ${responseFormatInstruction}`;
+}
+
+async function requestQuestionBatch(params: {
+  lovableApiKey: string;
+  systemPrompt: string;
+  userPrompt: string;
+  timeoutMs?: number;
+}) {
+  const { lovableApiKey, systemPrompt, userPrompt, timeoutMs = BATCH_TIMEOUT_MS } = params;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort("AI batch timed out"), timeoutMs);
+
+  try {
+    const aiResp = await fetch(AI_URL, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${lovableApiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "google/gemini-2.5-pro",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
+        tools: [
+          {
+            type: "function",
+            function: {
+              name: "return_questions",
+              description: "Return the generated SAT practice questions.",
+              parameters: {
+                type: "object",
+                properties: {
+                  questions: {
+                    type: "array",
+                    items: {
+                      type: "object",
+                      properties: {
+                        section: { type: "string", enum: ["Math", "Reading & Writing"] },
+                        topic: { type: "string" },
+                        difficulty: { type: "string", enum: ["easy", "medium", "hard"] },
+                        passage: { type: "string", description: "Optional reading passage." },
+                        prompt: { type: "string" },
+                        choices: { type: "array", items: { type: "string" }, minItems: 4, maxItems: 4 },
+                        correct: { type: "integer", minimum: 0, maximum: 3 },
+                        responseType: { type: "string", enum: ["multiple-choice", "spr"] },
+                        correctText: { type: "string", description: "Required for student-produced Math responses." },
+                        explanation: { type: "string" },
+                      },
+                      required: ["section", "topic", "difficulty", "prompt", "choices", "correct", "responseType", "explanation"],
+                      additionalProperties: false,
+                    },
+                  },
+                },
+                required: ["questions"],
+                additionalProperties: false,
+              },
+            },
+          },
+        ],
+        tool_choice: { type: "function", function: { name: "return_questions" } },
+      }),
+      signal: controller.signal,
+    });
+
+    if (aiResp.status === 429) return { retryable: true as const, error: "Rate limits exceeded, please try again shortly." };
+    if (aiResp.status === 402) return { retryable: false as const, error: "AI credits exhausted. Add funds in Settings → Workspace → Usage." };
+    if (!aiResp.ok) {
+      const text = await aiResp.text();
+      console.error("AI gateway error", aiResp.status, text);
+      return { retryable: true as const, error: "AI gateway error" };
+    }
+
+    const data = await aiResp.json();
+    const toolCall = data.choices?.[0]?.message?.tool_calls?.[0];
+    const args = toolCall?.function?.arguments;
+    if (!args) return { retryable: true as const, error: "No tool call returned" };
+    const parsed = JSON.parse(args);
+    return { retryable: false as const, questions: (parsed?.questions ?? []) as GeneratedQuestion[] };
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      console.warn("AI batch timed out; will retry with fallback model");
+      return { retryable: true as const, error: "AI batch timed out" };
+    }
+    console.error("AI batch request failed", error);
+    return { retryable: true as const, error: error instanceof Error ? error.message : "AI request failed" };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function generateBatchWithFallback(params: {
+  lovableApiKey: string;
+  systemPrompt: string;
+  userPrompt: string;
+}) {
+  const primary = await requestQuestionBatch(params);
+  if ("questions" in primary) return primary.questions;
+  if (!primary.retryable) throw new Error(primary.error);
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort("Fallback AI batch timed out"), BATCH_TIMEOUT_MS);
+  try {
+    const aiResp = await fetch(AI_URL, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${params.lovableApiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "google/gemini-3-flash-preview",
+        messages: [
+          { role: "system", content: params.systemPrompt },
+          { role: "user", content: `${params.userPrompt} Preserve SAT realism and correctness; prioritize speed without lowering quality.` },
+        ],
+        tools: [
+          {
+            type: "function",
+            function: {
+              name: "return_questions",
+              description: "Return the generated SAT practice questions.",
+              parameters: {
+                type: "object",
+                properties: {
+                  questions: {
+                    type: "array",
+                    items: {
+                      type: "object",
+                      properties: {
+                        section: { type: "string", enum: ["Math", "Reading & Writing"] },
+                        topic: { type: "string" },
+                        difficulty: { type: "string", enum: ["easy", "medium", "hard"] },
+                        passage: { type: "string" },
+                        prompt: { type: "string" },
+                        choices: { type: "array", items: { type: "string" }, minItems: 4, maxItems: 4 },
+                        correct: { type: "integer", minimum: 0, maximum: 3 },
+                        responseType: { type: "string", enum: ["multiple-choice", "spr"] },
+                        correctText: { type: "string" },
+                        explanation: { type: "string" },
+                      },
+                      required: ["section", "topic", "difficulty", "prompt", "choices", "correct", "responseType", "explanation"],
+                      additionalProperties: false,
+                    },
+                  },
+                },
+                required: ["questions"],
+                additionalProperties: false,
+              },
+            },
+          },
+        ],
+        tool_choice: { type: "function", function: { name: "return_questions" } },
+      }),
+      signal: controller.signal,
+    });
+
+    if (aiResp.status === 429) throw new Error("Rate limits exceeded, please try again shortly.");
+    if (aiResp.status === 402) throw new Error("AI credits exhausted. Add funds in Settings → Workspace → Usage.");
+    if (!aiResp.ok) {
+      const text = await aiResp.text();
+      console.error("Fallback AI gateway error", aiResp.status, text);
+      throw new Error("AI gateway error");
+    }
+
+    const data = await aiResp.json();
+    const toolCall = data.choices?.[0]?.message?.tool_calls?.[0];
+    const args = toolCall?.function?.arguments;
+    if (!args) throw new Error("No tool call returned");
+    const parsed = JSON.parse(args);
+    return (parsed?.questions ?? []) as GeneratedQuestion[];
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function distributeMathSpr(totalCount: number, batchCount: number) {
+  const targetSpr = Math.round(totalCount * 0.25);
+  const perBatch = Array.from({ length: batchCount }, (_, i) => {
+    const start = Math.floor((targetSpr * i) / batchCount);
+    const end = Math.floor((targetSpr * (i + 1)) / batchCount);
+    return end - start;
+  });
+  return perBatch;
+}
+
 // Per-user daily generation cap (each call counts as 1, regardless of question count)
 const DAILY_CALL_CAP = 40;
 
