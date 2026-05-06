@@ -27,21 +27,28 @@ const Boxes = () => {
   const [lastReward, setLastReward] = useState<BoxReward | null>(null);
   const activeBox = boxes.find((box) => box.id === activeId) ?? null;
 
+  const [upgradeFlash, setUpgradeFlash] = useState<{ to: MysteryBox["tier"] } | null>(null);
+
   const beginOpening = () => {
     if (!unopened.length) return;
     setLastReward(null);
+    setUpgradeFlash(null);
     setActiveId(unopened[0].id);
   };
 
-  const onTap = async (box: MysteryBox) => {
-    if (box.upgrade_clicks_used >= 3) return;
-    const before = box.tier;
-    const result = await upgradeMysteryBox(box.id);
-    if (!result) return;
-    toast({ title: result.tier !== before ? `${tierLabels[result.tier]} upgrade!` : "No upgrade", description: `${3 - result.upgrade_clicks_used} taps left.` });
-  };
-
-  const onOpen = async (box: MysteryBox) => {
+  const onTapBox = async (box: MysteryBox) => {
+    if (opening || lastReward) return;
+    if (box.upgrade_clicks_used < 3) {
+      const before = box.tier;
+      const result = await upgradeMysteryBox(box.id);
+      if (!result) return;
+      if (result.tier !== before) {
+        setUpgradeFlash({ to: result.tier });
+        window.setTimeout(() => setUpgradeFlash(null), 1100);
+      }
+      return;
+    }
+    // All upgrades done — this tap opens it
     setOpening(true);
     setLastReward(null);
     window.setTimeout(async () => {
@@ -49,7 +56,7 @@ const Boxes = () => {
       setLastReward(reward);
       setOpening(false);
       if (reward) toast({ title: "Reward unlocked", description: reward.label });
-    }, 1100);
+    }, 900);
   };
 
   const nextBox = () => {
