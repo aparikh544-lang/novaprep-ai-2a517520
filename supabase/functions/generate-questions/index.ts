@@ -297,22 +297,32 @@ Deno.serve(async (req) => {
       : batchSizes.map(() => 0);
 
     const systemPrompt = buildSystemPrompt();
-    const batchQuestions = await mapWithConcurrency(batchSizes, BATCH_CONCURRENCY, (batchCount, batchIndex) =>
-      generateBatchWithFallback({
-        lovableApiKey: LOVABLE_API_KEY,
-        systemPrompt,
-        userPrompt: buildUserPrompt({
-          count: batchCount,
-          difficultyBias,
-          mode,
-          section: effectiveSection,
-          topic,
-          batchIndex,
-          batchCount: batchSizes.length,
-          sprCount: sprDistribution[batchIndex] ?? 0,
-        }),
-      })
-    );
+    let batchQuestions: GeneratedQuestion[][];
+    try {
+      batchQuestions = await mapWithConcurrency(batchSizes, BATCH_CONCURRENCY, (batchCount, batchIndex) =>
+        generateBatchWithFallback({
+          lovableApiKey: LOVABLE_API_KEY,
+          systemPrompt,
+          userPrompt: buildUserPrompt({
+            count: batchCount,
+            difficultyBias,
+            mode,
+            section: effectiveSection,
+            topic,
+            batchIndex,
+            batchCount: batchSizes.length,
+            sprCount: sprDistribution[batchIndex] ?? 0,
+          }),
+        })
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Question generation failed.";
+      const status = /Rate limits exceeded/i.test(message) ? 429 : /AI credits exhausted/i.test(message) ? 402 : 500;
+      return new Response(JSON.stringify({ error: message }), {
+        status,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     const questions = batchQuestions.flat().slice(0, count);
     if (!questions.length) {
