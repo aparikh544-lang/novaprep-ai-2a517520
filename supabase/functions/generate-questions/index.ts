@@ -25,8 +25,10 @@ const TOPICS_RW = [
 ];
 
 const AI_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
-const BATCH_SIZE = 10;
-const BATCH_TIMEOUT_MS = 60_000;
+const BATCH_SIZE = 6;
+const PRIMARY_BATCH_TIMEOUT_MS = 18_000;
+const FALLBACK_BATCH_TIMEOUT_MS = 15_000;
+const BATCH_CONCURRENCY = 3;
 
 type DifficultyBias = "balanced" | "easier" | "harder";
 type SectionName = "Math" | "Reading & Writing";
@@ -86,9 +88,10 @@ async function requestQuestionBatch(params: {
   lovableApiKey: string;
   systemPrompt: string;
   userPrompt: string;
+  model: string;
   timeoutMs?: number;
 }) {
-  const { lovableApiKey, systemPrompt, userPrompt, timeoutMs = BATCH_TIMEOUT_MS } = params;
+  const { lovableApiKey, systemPrompt, userPrompt, model, timeoutMs = PRIMARY_BATCH_TIMEOUT_MS } = params;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort("AI batch timed out"), timeoutMs);
 
@@ -100,7 +103,7 @@ async function requestQuestionBatch(params: {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-pro",
+        model,
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },
@@ -177,83 +180,42 @@ async function generateBatchWithFallback(params: {
   systemPrompt: string;
   userPrompt: string;
 }) {
-  const primary = await requestQuestionBatch(params);
-  if ("questions" in primary) return primary.questions;
-  if (!primary.retryable) throw new Error(primary.error);
+  const attempts = [
+    { model: "google/gemini-3-flash-preview", timeoutMs: PRIMARY_BATCH_TIMEOUT_MS, suffix: "" },
+    { model: "google/gemini-2.5-flash", timeoutMs: FALLBACK_BATCH_TIMEOUT_MS, suffix: " Preserve SAT realism and correctness; prioritize speed without lowering quality." },
+    { model: "google/gemini-2.5-flash-lite", timeoutMs: FALLBACK_BATCH_TIMEOUT_MS, suffix: " Keep the wording concise and varied so the response returns quickly, but maintain SAT-level correctness." },
+  ] as const;
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort("Fallback AI batch timed out"), BATCH_TIMEOUT_MS);
-  try {
-    const aiResp = await fetch(AI_URL, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${params.lovableApiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
-        messages: [
-          { role: "system", content: params.systemPrompt },
-          { role: "user", content: `${params.userPrompt} Preserve SAT realism and correctness; prioritize speed without lowering quality.` },
-        ],
-        tools: [
-          {
-            type: "function",
-            function: {
-              name: "return_questions",
-              description: "Return the generated SAT practice questions.",
-              parameters: {
-                type: "object",
-                properties: {
-                  questions: {
-                    type: "array",
-                    items: {
-                      type: "object",
-                      properties: {
-                        section: { type: "string", enum: ["Math", "Reading & Writing"] },
-                        topic: { type: "string" },
-                        difficulty: { type: "string", enum: ["easy", "medium", "hard"] },
-                        passage: { type: "string" },
-                        prompt: { type: "string" },
-                        choices: { type: "array", items: { type: "string" }, minItems: 4, maxItems: 4 },
-                        correct: { type: "integer", minimum: 0, maximum: 3 },
-                        responseType: { type: "string", enum: ["multiple-choice", "spr"] },
-                        correctText: { type: "string" },
-                        explanation: { type: "string" },
-                      },
-                      required: ["section", "topic", "difficulty", "prompt", "choices", "correct", "responseType", "explanation"],
-                      additionalProperties: false,
-                    },
-                  },
-                },
-                required: ["questions"],
-                additionalProperties: false,
-              },
-            },
-          },
-        ],
-        tool_choice: { type: "function", function: { name: "return_questions" } },
-      }),
-      signal: controller.signal,
+  let lastError = "AI gateway error";
+  for (const attempt of attempts) {
+    const result = await requestQuestionBatch({
+      ...params,
+      model: attempt.model,
+      timeoutMs: attempt.timeoutMs,
+      userPrompt: `${params.userPrompt}${attempt.suffix}`,
     });
-
-    if (aiResp.status === 429) throw new Error("Rate limits exceeded, please try again shortly.");
-    if (aiResp.status === 402) throw new Error("AI credits exhausted. Add funds in Settings → Workspace → Usage.");
-    if (!aiResp.ok) {
-      const text = await aiResp.text();
-      console.error("Fallback AI gateway error", aiResp.status, text);
-      throw new Error("AI gateway error");
-    }
-
-    const data = await aiResp.json();
-    const toolCall = data.choices?.[0]?.message?.tool_calls?.[0];
-    const args = toolCall?.function?.arguments;
-    if (!args) throw new Error("No tool call returned");
-    const parsed = JSON.parse(args);
-    return (parsed?.questions ?? []) as GeneratedQuestion[];
-  } finally {
-    clearTimeout(timeout);
+    if ("questions" in result) return result.questions;
+    lastError = result.error;
+    if (!result.retryable) throw new Error(result.error);
   }
+
+  throw new Error(lastError);
+}
+
+async function mapWithConcurrency<T, R>(items: T[], limit: number, mapper: (item: T, index: number) => Promise<R>) {
+  const results: R[] = new Array(items.length);
+  let nextIndex = 0;
+
+  async function worker() {
+    while (nextIndex < items.length) {
+      const currentIndex = nextIndex++;
+      results[currentIndex] = await mapper(items[currentIndex], currentIndex);
+    }
+  }
+
+  const workers = Array.from({ length: Math.min(limit, items.length) }, () => worker());
+  await Promise.all(workers);
+  return results;
 }
 
 function distributeMathSpr(totalCount: number, batchCount: number) {
