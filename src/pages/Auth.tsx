@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Rocket } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { lovable } from "@/integrations/lovable";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
 
@@ -138,6 +139,32 @@ const Auth = () => {
             {busy ? "…" : mode === "signup" ? "Launch" : "Sign in"}
           </button>
         </form>
+
+        <div className="my-4 flex items-center gap-2 text-[10px] uppercase tracking-widest text-muted-foreground">
+          <div className="h-px flex-1 bg-border" /> or <div className="h-px flex-1 bg-border" />
+        </div>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={async () => {
+            setBusy(true);
+            try {
+              const result = await lovable.auth.signInWithOAuth("google", {
+                redirect_uri: window.location.origin,
+              });
+              if (result.error) throw result.error;
+            } catch (err: any) {
+              toast({ title: "Google sign-in failed", description: err.message ?? "Try again", variant: "destructive" });
+              setBusy(false);
+            }
+          }}
+          className="w-full inline-flex items-center justify-center gap-3 px-4 py-3 rounded-lg bg-background/60 border border-border hover:bg-muted/40 text-sm font-medium disabled:opacity-50"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+            <path fill="currentColor" d="M12 10.2v3.9h5.5c-.24 1.4-1.66 4.1-5.5 4.1-3.31 0-6.01-2.74-6.01-6.2S8.69 5.8 12 5.8c1.88 0 3.14.8 3.86 1.49l2.63-2.54C16.83 3.2 14.65 2.2 12 2.2 6.94 2.2 2.85 6.29 2.85 11.4S6.94 20.6 12 20.6c6.93 0 9.15-4.86 9.15-7.36 0-.49-.05-.86-.13-1.24H12z"/>
+          </svg>
+          Continue with Google
+        </button>
 
         <div className="mt-5 text-center text-xs text-muted-foreground">
           {mode === "signup" ? "Already a Cadet?" : "New to NovaPrep AI?"}{" "}
