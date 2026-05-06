@@ -28,7 +28,7 @@ const AI_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
 const BATCH_SIZE = 6;
 const PRIMARY_BATCH_TIMEOUT_MS = 18_000;
 const FALLBACK_BATCH_TIMEOUT_MS = 15_000;
-const BATCH_CONCURRENCY = 3;
+const BATCH_CONCURRENCY = 2;
 
 type DifficultyBias = "balanced" | "easier" | "harder";
 type SectionName = "Math" | "Reading & Writing";
@@ -149,7 +149,7 @@ async function requestQuestionBatch(params: {
       signal: controller.signal,
     });
 
-    if (aiResp.status === 429) return { retryable: true as const, error: "Rate limits exceeded, please try again shortly." };
+    if (aiResp.status === 429) return { retryable: false as const, error: "Rate limits exceeded, please try again shortly." };
     if (aiResp.status === 402) return { retryable: false as const, error: "AI credits exhausted. Add funds in Settings → Workspace → Usage." };
     if (!aiResp.ok) {
       const text = await aiResp.text();
