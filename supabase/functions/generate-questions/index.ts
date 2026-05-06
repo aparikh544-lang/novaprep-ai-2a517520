@@ -297,23 +297,21 @@ Deno.serve(async (req) => {
       : batchSizes.map(() => 0);
 
     const systemPrompt = buildSystemPrompt();
-    const batchQuestions = await Promise.all(
-      batchSizes.map((batchCount, batchIndex) =>
-        generateBatchWithFallback({
-          lovableApiKey: LOVABLE_API_KEY,
-          systemPrompt,
-          userPrompt: buildUserPrompt({
-            count: batchCount,
-            difficultyBias,
-            mode,
-            section: effectiveSection,
-            topic,
-            batchIndex,
-            batchCount: batchSizes.length,
-            sprCount: sprDistribution[batchIndex] ?? 0,
-          }),
-        })
-      )
+    const batchQuestions = await mapWithConcurrency(batchSizes, BATCH_CONCURRENCY, (batchCount, batchIndex) =>
+      generateBatchWithFallback({
+        lovableApiKey: LOVABLE_API_KEY,
+        systemPrompt,
+        userPrompt: buildUserPrompt({
+          count: batchCount,
+          difficultyBias,
+          mode,
+          section: effectiveSection,
+          topic,
+          batchIndex,
+          batchCount: batchSizes.length,
+          sprCount: sprDistribution[batchIndex] ?? 0,
+        }),
+      })
     );
 
     const questions = batchQuestions.flat().slice(0, count);
