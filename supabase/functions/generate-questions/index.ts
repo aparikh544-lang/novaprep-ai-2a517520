@@ -246,10 +246,10 @@ Deno.serve(async (req) => {
     const section = allowedSections.has(body.section) ? body.section : undefined;
     const topic = typeof body.topic === "string" ? body.topic.slice(0, 200) : undefined;
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    const GROQ_API_KEY = Deno.env.get("GROQ_API_KEY");
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
     const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
+    if (!GROQ_API_KEY) throw new Error("GROQ_API_KEY not configured");
 
     // ------- Mandatory auth + per-user daily cap -------
     const authHeader = req.headers.get("Authorization") ?? "";
@@ -301,7 +301,7 @@ Deno.serve(async (req) => {
     try {
       batchQuestions = await mapWithConcurrency(batchSizes, BATCH_CONCURRENCY, (batchCount, batchIndex) =>
         generateBatchWithFallback({
-          lovableApiKey: LOVABLE_API_KEY,
+          apiKey: GROQ_API_KEY,
           systemPrompt,
           userPrompt: buildUserPrompt({
             count: batchCount,
