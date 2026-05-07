@@ -105,46 +105,14 @@ async function requestQuestionBatch(params: {
       body: JSON.stringify({
         model,
         messages: [
-          { role: "system", content: systemPrompt },
+          {
+            role: "system",
+            content: `${systemPrompt}\n\nOUTPUT FORMAT: Respond with ONLY a valid JSON object (no prose, no markdown fences) of the exact shape: {"questions":[ {"section":"Math"|"Reading & Writing","topic":string,"difficulty":"easy"|"medium"|"hard","passage":string?,"prompt":string,"choices":[string,string,string,string],"correct":0|1|2|3,"responseType":"multiple-choice"|"spr","correctText":string?,"explanation":string} ]}. EVERY question MUST include all 4 choices and a correct index 0-3 — even SPR questions must still provide 4 plausible numeric choices with the correct one at index "correct" AND a correctText field. Never omit choices. Never add fields outside this schema.`,
+          },
           { role: "user", content: userPrompt },
         ],
-        tools: [
-          {
-            type: "function",
-            function: {
-              name: "return_questions",
-              description: "Return the generated SAT practice questions.",
-              parameters: {
-                type: "object",
-                properties: {
-                  questions: {
-                    type: "array",
-                    items: {
-                      type: "object",
-                      properties: {
-                        section: { type: "string", enum: ["Math", "Reading & Writing"] },
-                        topic: { type: "string" },
-                        difficulty: { type: "string", enum: ["easy", "medium", "hard"] },
-                        passage: { type: "string", description: "Optional reading passage." },
-                        prompt: { type: "string" },
-                        choices: { type: "array", items: { type: "string" }, minItems: 4, maxItems: 4 },
-                        correct: { type: "integer", minimum: 0, maximum: 3 },
-                        responseType: { type: "string", enum: ["multiple-choice", "spr"] },
-                        correctText: { type: "string", description: "Required for student-produced Math responses." },
-                        explanation: { type: "string" },
-                      },
-                      required: ["section", "topic", "difficulty", "prompt", "choices", "correct", "responseType", "explanation"],
-                      additionalProperties: false,
-                    },
-                  },
-                },
-                required: ["questions"],
-                additionalProperties: false,
-              },
-            },
-          },
-        ],
-        tool_choice: { type: "function", function: { name: "return_questions" } },
+        response_format: { type: "json_object" },
+        temperature: 0.7,
       }),
       signal: controller.signal,
     });
@@ -159,11 +127,25 @@ async function requestQuestionBatch(params: {
     }
 
     const data = await aiResp.json();
-    const toolCall = data.choices?.[0]?.message?.tool_calls?.[0];
-    const args = toolCall?.function?.arguments;
-    if (!args) return { retryable: true as const, error: "No tool call returned" };
-    const parsed = JSON.parse(args);
-    return { retryable: false as const, questions: (parsed?.questions ?? []) as GeneratedQuestion[] };
+    const content = data.choices?.[0]?.message?.content;
+    if (!content) return { retryable: true as const, error: "No content returned" };
+    let parsed: any;
+    try {
+      parsed = JSON.parse(content);
+    } catch {
+      const match = content.match(/\{[\s\S]*\}/);
+      if (!match) return { retryable: true as const, error: "Invalid JSON returned" };
+      parsed = JSON.parse(match[0]);
+    }
+    const questions = (parsed?.questions ?? []) as GeneratedQuestion[];
+    // Defensive: filter out any malformed entries instead of failing the whole batch
+    const valid = questions.filter(
+      (q) =>
+        q && q.section && q.prompt && Array.isArray(q.choices) && q.choices.length === 4 &&
+        Number.isInteger(q.correct) && q.correct >= 0 && q.correct <= 3 && q.explanation,
+    );
+    if (!valid.length) return { retryable: true as const, error: "No valid questions returned" };
+    return { retryable: false as const, questions: valid };
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") {
       console.warn("AI batch timed out; will retry with fallback model");
