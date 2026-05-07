@@ -182,8 +182,9 @@ async function generateBatchWithFallback(params: {
   userPrompt: string;
 }) {
   const attempts = [
-    { model: "llama-3.3-70b-versatile", timeoutMs: PRIMARY_BATCH_TIMEOUT_MS, suffix: "" },
-    { model: "llama-3.1-8b-instant", timeoutMs: FALLBACK_BATCH_TIMEOUT_MS, suffix: " Keep wording concise but maintain full SAT-level correctness and rigor." },
+    { model: "openai/gpt-oss-120b", timeoutMs: PRIMARY_BATCH_TIMEOUT_MS, suffix: "" },
+    { model: "openai/gpt-oss-20b", timeoutMs: FALLBACK_BATCH_TIMEOUT_MS, suffix: " Keep wording concise but maintain full SAT-level correctness and rigor." },
+    { model: "llama-3.3-70b-versatile", timeoutMs: FALLBACK_BATCH_TIMEOUT_MS, suffix: " Output ONLY the tool call with valid JSON matching the schema exactly. Do not add commentary." },
   ] as const;
 
   let lastError = "AI gateway error";
