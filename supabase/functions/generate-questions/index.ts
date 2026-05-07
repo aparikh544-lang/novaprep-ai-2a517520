@@ -24,7 +24,7 @@ const TOPICS_RW = [
   "Grammar: Punctuation",
 ];
 
-const AI_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
+const AI_URL = "https://api.groq.com/openai/v1/chat/completions";
 const BATCH_SIZE = 6;
 const PRIMARY_BATCH_TIMEOUT_MS = 18_000;
 const FALLBACK_BATCH_TIMEOUT_MS = 15_000;
@@ -85,13 +85,13 @@ function buildUserPrompt(opts: {
 }
 
 async function requestQuestionBatch(params: {
-  lovableApiKey: string;
+  apiKey: string;
   systemPrompt: string;
   userPrompt: string;
   model: string;
   timeoutMs?: number;
 }) {
-  const { lovableApiKey, systemPrompt, userPrompt, model, timeoutMs = PRIMARY_BATCH_TIMEOUT_MS } = params;
+  const { apiKey, systemPrompt, userPrompt, model, timeoutMs = PRIMARY_BATCH_TIMEOUT_MS } = params;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort("AI batch timed out"), timeoutMs);
 
@@ -99,7 +99,7 @@ async function requestQuestionBatch(params: {
     const aiResp = await fetch(AI_URL, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${lovableApiKey}`,
+        Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
@@ -150,7 +150,8 @@ async function requestQuestionBatch(params: {
     });
 
     if (aiResp.status === 429) return { retryable: false as const, error: "Rate limits exceeded, please try again shortly." };
-    if (aiResp.status === 402) return { retryable: false as const, error: "AI credits exhausted. Add funds in Settings → Workspace → Usage." };
+    if (aiResp.status === 401 || aiResp.status === 403) return { retryable: false as const, error: "AI provider authentication failed. Check the GROQ_API_KEY secret." };
+    if (aiResp.status === 402) return { retryable: false as const, error: "AI credits exhausted on Groq account." };
     if (!aiResp.ok) {
       const text = await aiResp.text();
       console.error("AI gateway error", aiResp.status, text);
@@ -176,14 +177,13 @@ async function requestQuestionBatch(params: {
 }
 
 async function generateBatchWithFallback(params: {
-  lovableApiKey: string;
+  apiKey: string;
   systemPrompt: string;
   userPrompt: string;
 }) {
   const attempts = [
-    { model: "google/gemini-3-flash-preview", timeoutMs: PRIMARY_BATCH_TIMEOUT_MS, suffix: "" },
-    { model: "google/gemini-2.5-flash", timeoutMs: FALLBACK_BATCH_TIMEOUT_MS, suffix: " Preserve SAT realism and correctness; prioritize speed without lowering quality." },
-    { model: "google/gemini-2.5-flash-lite", timeoutMs: FALLBACK_BATCH_TIMEOUT_MS, suffix: " Keep the wording concise and varied so the response returns quickly, but maintain SAT-level correctness." },
+    { model: "llama-3.3-70b-versatile", timeoutMs: PRIMARY_BATCH_TIMEOUT_MS, suffix: "" },
+    { model: "llama-3.1-8b-instant", timeoutMs: FALLBACK_BATCH_TIMEOUT_MS, suffix: " Keep wording concise but maintain full SAT-level correctness and rigor." },
   ] as const;
 
   let lastError = "AI gateway error";
