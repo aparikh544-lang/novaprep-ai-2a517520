@@ -1,4 +1,4 @@
-// Edge function: generate original SAT-style practice questions via Lovable AI Gateway
+// Edge function: generate original SAT-style practice questions via OpenRouter API
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
 const corsHeaders = {
@@ -24,7 +24,7 @@ const TOPICS_RW = [
   "Grammar: Punctuation",
 ];
 
-const AI_URL = "https://api.groq.com/openai/v1/chat/completions";
+const AI_URL = "https://openrouter.ai/api/v1/chat/completions";
 const BATCH_SIZE = 6;
 const PRIMARY_BATCH_TIMEOUT_MS = 18_000;
 const FALLBACK_BATCH_TIMEOUT_MS = 15_000;
@@ -101,6 +101,8 @@ async function requestQuestionBatch(params: {
       headers: {
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
+        "HTTP-Referer": "https://novaprep.app",
+        "X-Title": "NovaPrep SAT Practice",
       },
       body: JSON.stringify({
         model,
@@ -111,15 +113,14 @@ async function requestQuestionBatch(params: {
           },
           { role: "user", content: userPrompt },
         ],
-        response_format: { type: "json_object" },
         temperature: 0.7,
       }),
       signal: controller.signal,
     });
 
     if (aiResp.status === 429) return { retryable: false as const, error: "Rate limits exceeded, please try again shortly." };
-    if (aiResp.status === 401 || aiResp.status === 403) return { retryable: false as const, error: "AI provider authentication failed. Check the GROQ_API_KEY secret." };
-    if (aiResp.status === 402) return { retryable: false as const, error: "AI credits exhausted on Groq account." };
+    if (aiResp.status === 401 || aiResp.status === 403) return { retryable: false as const, error: "AI provider authentication failed. Check the OPENROUTER_API_KEY secret." };
+    if (aiResp.status === 402) return { retryable: false as const, error: "AI credits exhausted on OpenRouter account." };
     if (!aiResp.ok) {
       const text = await aiResp.text();
       console.error("AI gateway error", aiResp.status, text);
@@ -164,9 +165,9 @@ async function generateBatchWithFallback(params: {
   userPrompt: string;
 }) {
   const attempts = [
-    { model: "openai/gpt-oss-120b", timeoutMs: PRIMARY_BATCH_TIMEOUT_MS, suffix: "" },
-    { model: "openai/gpt-oss-20b", timeoutMs: FALLBACK_BATCH_TIMEOUT_MS, suffix: " Keep wording concise but maintain full SAT-level correctness and rigor." },
-    { model: "llama-3.3-70b-versatile", timeoutMs: FALLBACK_BATCH_TIMEOUT_MS, suffix: " Output ONLY the tool call with valid JSON matching the schema exactly. Do not add commentary." },
+    { model: "google/gemini-2.0-flash-001", timeoutMs: PRIMARY_BATCH_TIMEOUT_MS, suffix: "" },
+    { model: "meta-llama/llama-3.3-70b-instruct", timeoutMs: FALLBACK_BATCH_TIMEOUT_MS, suffix: " Keep wording concise but maintain full SAT-level correctness and rigor." },
+    { model: "meta-llama/llama-3.1-8b-instruct", timeoutMs: FALLBACK_BATCH_TIMEOUT_MS, suffix: " Output ONLY valid JSON matching the schema exactly. Do not add commentary." },
   ] as const;
 
   let lastError = "AI gateway error";
@@ -229,10 +230,10 @@ Deno.serve(async (req) => {
     const section = allowedSections.has(body.section) ? body.section : undefined;
     const topic = typeof body.topic === "string" ? body.topic.slice(0, 200) : undefined;
 
-    const GROQ_API_KEY = Deno.env.get("GROQ_API_KEY");
+    const OPENROUTER_API_KEY = Deno.env.get("OPENROUTER_API_KEY");
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
     const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    if (!GROQ_API_KEY) throw new Error("GROQ_API_KEY not configured");
+    if (!OPENROUTER_API_KEY) throw new Error("OPENROUTER_API_KEY not configured");
 
     // ------- Mandatory auth + per-user daily cap -------
     const authHeader = req.headers.get("Authorization") ?? "";
@@ -284,7 +285,7 @@ Deno.serve(async (req) => {
     try {
       batchQuestions = await mapWithConcurrency(batchSizes, BATCH_CONCURRENCY, (batchCount, batchIndex) =>
         generateBatchWithFallback({
-          apiKey: GROQ_API_KEY,
+          apiKey: OPENROUTER_API_KEY,
           systemPrompt,
           userPrompt: buildUserPrompt({
             count: batchCount,
