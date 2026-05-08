@@ -16,7 +16,7 @@ const Practice = () => {
       title: "Full SAT Simulation",
       desc: "98-question SAT build: 54 Reading & Writing questions, then 44 Math questions with real section timing.",
       cta: "Begin Simulation",
-      duration: "≈ 2h 14m",
+      duration: "2h 14m",
       route: "/test/full",
       highlight: true,
     },
@@ -26,7 +26,7 @@ const Practice = () => {
       title: "Reading & Writing Drill",
       desc: "Short, focused set covering Main Idea, Inference, and Grammar.",
       cta: "Start Drill",
-      duration: "12 min",
+      duration: "32 min",
       route: "/test/reading",
     },
     {
@@ -35,7 +35,7 @@ const Practice = () => {
       title: "Math Sprint",
       desc: "Algebra, Quadratics, and Data Analysis — paced at 75 seconds per question.",
       cta: "Start Sprint",
-      duration: "10 min",
+      duration: "70 min",
       route: "/test/math",
     },
     {
@@ -44,7 +44,7 @@ const Practice = () => {
       title: "Weak-Skill Arena",
       desc: `Fresh AI-generated questions tuned to ${weakTopic}. Pure practice — no replays.`,
       cta: "Enter Arena",
-      duration: "8 min",
+      duration: "18 min",
       route: `/test/redemption?topic=${encodeURIComponent(weakTopic)}`,
     },
   ];

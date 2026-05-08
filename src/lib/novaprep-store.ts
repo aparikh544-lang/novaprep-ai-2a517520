@@ -356,17 +356,17 @@ export const useNova = create<NovaState>((set, get) => ({
 
     const unlockedLevels = Math.max(1, Math.floor(profile.xp / 500) + 1);
     const existingLevels = new Set(get().mysteryBoxes.map((box) => box.level_number));
-    const missingLevels = Array.from({ length: unlockedLevels }, (_, index) => index + 1).filter(
-      (level) => !existingLevels.has(level),
-    );
+    // Always include level 0 as the free starter box
+    const allLevels = [0, ...Array.from({ length: unlockedLevels }, (_, index) => index + 1)];
+    const missingLevels = allLevels.filter((level) => !existingLevels.has(level));
 
     if (missingLevels.length > 0) {
       await supabase.from("mystery_boxes").insert(
         missingLevels.map((level) => ({
           user_id: profile.id,
           level_number: level,
-          tier: "common" as const,
-          reward_label: `Level ${level} Mystery Box`,
+          tier: level === 0 ? "rare" as const : "common" as const,
+          reward_label: level === 0 ? "Starter Box" : `Level ${level} Mystery Box`,
         })),
       );
     }

@@ -31,6 +31,7 @@ const sectionForTopic = (topic: string): DailyTask["section"] => {
 // Cache today's routine in localStorage so completed tasks don't vanish when
 // underlying mistake counts change mid-day.
 const ROUTINE_KEY = "novaprep:daily-routine";
+const ROUTINE_VERSION = 2;
 const todayStr = () => new Date().toISOString().slice(0, 10);
 
 function loadCachedRoutine(): DailyRoutine | null {
@@ -38,13 +39,13 @@ function loadCachedRoutine(): DailyRoutine | null {
     const raw = localStorage.getItem(ROUTINE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
-    if (parsed?.date === todayStr() && parsed?.routine) return parsed.routine as DailyRoutine;
+    if (parsed?.date === todayStr() && parsed?.version === ROUTINE_VERSION && parsed?.routine) return parsed.routine as DailyRoutine;
   } catch {}
   return null;
 }
 function saveCachedRoutine(routine: DailyRoutine) {
   try {
-    localStorage.setItem(ROUTINE_KEY, JSON.stringify({ date: todayStr(), routine }));
+    localStorage.setItem(ROUTINE_KEY, JSON.stringify({ date: todayStr(), version: ROUTINE_VERSION, routine }));
   } catch {}
 }
 
@@ -91,7 +92,7 @@ function buildDailyRoutineInner(
     tasks.push(
       {
         task: "Diagnostic — Math Sprint",
-        duration: 15,
+        duration: 70,
         topic: "Mixed Math",
         section: "Math",
         reason: "Establish a baseline for algebra & data analysis pacing.",
@@ -99,7 +100,7 @@ function buildDailyRoutineInner(
       },
       {
         task: "Diagnostic — Reading & Writing",
-        duration: 15,
+        duration: 64,
         topic: "Mixed RW",
         section: "Reading & Writing",
         reason: "Calibrate inference, grammar, and transition accuracy.",
@@ -122,7 +123,7 @@ function buildDailyRoutineInner(
   const top = ranked[0];
   tasks.push({
     task: `Concept Drill — ${top[0]}`,
-    duration: 18,
+    duration: sectionForTopic(top[0]) === "Math" ? 70 : 32,
     topic: top[0],
     section: sectionForTopic(top[0]),
     reason: `You missed ${top[1].count} ${top[1].count === 1 ? "question" : "questions"} on this topic recently.`,
@@ -133,7 +134,7 @@ function buildDailyRoutineInner(
     const second = ranked[1];
     tasks.push({
       task: `Targeted Set — ${second[0]}`,
-      duration: 12,
+      duration: sectionForTopic(second[0]) === "Math" ? 70 : 32,
       topic: second[0],
       section: sectionForTopic(second[0]),
       reason: `Secondary weakness — ${second[1].count} recent miss${second[1].count === 1 ? "" : "es"}.`,
@@ -144,7 +145,7 @@ function buildDailyRoutineInner(
   if (timePressure > 0) {
     tasks.push({
       task: "Pacing Sprint — 75s/Q",
-      duration: 12,
+      duration: 18,
       topic: "Pacing",
       section: "Mixed",
       reason: `${timePressure} timed-out misses detected. Build pace muscle memory.`,
@@ -155,7 +156,7 @@ function buildDailyRoutineInner(
   if (recentAccuracy !== null && recentAccuracy >= 0.85 && mistakes.length < 3) {
     tasks.push({
       task: "Stretch Set — Hard Tier",
-      duration: 15,
+      duration: 18,
       topic: "Mixed Hard",
       section: "Mixed",
       reason: "You're outperforming your level. Try harder problems to push your score ceiling.",

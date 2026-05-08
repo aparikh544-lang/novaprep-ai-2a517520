@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Clock, Flag, X, ChevronRight, Rocket, Loader2, AlertTriangle, Coffee, CheckCircle2, XCircle } from "lucide-react";
-import { Question, ErrorReason } from "@/lib/novaprep-data";
-import { useNova } from "@/lib/novaprep-store";
+import { Question, ErrorReason, xpForDifficulty } from "@/lib/novaprep-data";
+import { useNova, xpMultiplierFromBoosts } from "@/lib/novaprep-store";
 import { generateQuestions } from "@/lib/generate-questions";
 import { sanitizeMath } from "@/lib/sanitize-math";
 import { toast } from "@/hooks/use-toast";
@@ -80,6 +80,8 @@ const TestSession = () => {
   const [answers, setAnswers] = useState<Record<string, AnswerValue>>({});
   const [flagged, setFlagged] = useState<Set<string>>(new Set());
   const [sessionTime, setSessionTime] = useState(0);
+  const sessionTimeRef = useRef(0);
+  const timerDisplayRef = useRef<HTMLSpanElement>(null);
   const [qStart, setQStart] = useState<number>(Date.now());
   const [timeByQuestion, setTimeByQuestion] = useState<Record<string, number>>({});
   const [reviewing, setReviewing] = useState(false);
@@ -144,15 +146,24 @@ const TestSession = () => {
         }))));
       } else {
         const fullSection = targetModule === 1 ? "Reading & Writing" : "Math";
+        const modeSection = m === "math" ? "Math" : m === "reading" ? "Reading & Writing" : undefined;
+        const requestedSection = m === "full" ? fullSection : modeSection;
         const modeTopic = requestedTopic && requestedTopic !== "Mixed SAT Skills" ? requestedTopic : undefined;
+        // Request extra questions to account for potential section mismatches
+        const requestCount = m === "full" ? (targetModule === 1 ? 54 : 44) : MODULE_SIZE[m] + 6;
         const qs = await generateQuestions({
           mode: m === "review" ? "redemption" : m,
-          count: m === "full" ? (targetModule === 1 ? 54 : 44) : MODULE_SIZE[m],
+          count: requestCount,
           difficultyBias: bias,
           topic: m === "redemption" ? weakTopic : modeTopic,
-          section: m === "full" ? fullSection : undefined,
+          section: requestedSection ?? undefined,
         });
-        setQuestions(prepareQuestions(qs));
+        // Filter to only include questions matching the requested section
+        const filtered = requestedSection
+          ? qs.filter((q) => q.section === requestedSection)
+          : qs;
+        const targetCount = m === "full" ? (targetModule === 1 ? 54 : 44) : MODULE_SIZE[m];
+        setQuestions(prepareQuestions(filtered.slice(0, targetCount)));
       }
     } catch (e: any) {
       toast({ title: "Question generation failed", description: e.message ?? "Please try again", variant: "destructive" });
@@ -212,7 +223,15 @@ const TestSession = () => {
 
   useEffect(() => {
     if (done || loading || reviewing || breakEndsAt) return;
-    const t = setInterval(() => setSessionTime((s) => Math.min(s + 1, currentLimit)), 1000);
+    const t = setInterval(() => {
+      sessionTimeRef.current = Math.min(sessionTimeRef.current + 1, currentLimit);
+      // Update the display ref directly to avoid full re-render
+      if (timerDisplayRef.current) {
+        timerDisplayRef.current.textContent = fmtTime(Math.max(0, currentLimit - sessionTimeRef.current));
+      }
+      // Sync state every 10s for effects that depend on sessionTime
+      if (sessionTimeRef.current % 10 === 0) setSessionTime(sessionTimeRef.current);
+    }, 1000);
     return () => clearInterval(t);
   }, [done, loading, reviewing, currentLimit, breakEndsAt]);
 
@@ -234,16 +253,23 @@ const TestSession = () => {
         correct += 1;
         const sourceMistakeId = qq.id.startsWith("redo:") ? qq.id.split(":")[1] : null;
         if (sourceMistakeId) tasks.push(resolveMistake(sourceMistakeId));
-        // awardXP is now optimistic local-only — no DB round-trip
-        gained += await awardXP(qq.difficulty);
+        gained += xpForDifficulty(qq.difficulty);
       } else if (answer !== undefined) {
         const elapsed = timeByQuestion[qq.id] ?? Math.round(sessionTime / Math.max(1, questions.length));
         const reason: ErrorReason = elapsed > 90 ? "Time Pressure" : qq.section === "Reading & Writing" ? "Misreading" : "Concept Gap";
         tasks.push(recordMistake({ question: qq, userChoice: answerIndex(qq, answer), timeSpent: elapsed, reason }));
       }
     }
-    await Promise.allSettled(tasks);
+    // Apply XP optimistically in one shot — no per-question DB round-trips
+    const mult = xpMultiplierFromBoosts(useNova.getState().profile?.active_boosts ?? []);
+    gained *= mult;
+    const profile = useNova.getState().profile;
+    if (profile) {
+      useNova.setState({ profile: { ...profile, xp: profile.xp + gained, streak: Math.max(1, profile.streak || 0) } });
+    }
     setXpEarned((x) => x + gained);
+    // Fire mistake recording in background — don't block the UI
+    Promise.allSettled(tasks).catch(() => {});
     return { correct, gained };
   };
 
@@ -256,7 +282,7 @@ const TestSession = () => {
         mode: m,
         score: correct + completed.correct,
         total: total + completed.total,
-        duration: sessionTime + completed.seconds,
+        duration: sessionTimeRef.current + completed.seconds,
         xpEarned: xpEarned + completed.xp + gained,
       });
       if (taskLabel && dayLabel) await markTaskComplete({ taskKey: taskCompletionKey(dayLabel, taskLabel), taskLabel, dayLabel });
@@ -275,7 +301,7 @@ const TestSession = () => {
       const result = await gradeCurrentModule();
       if (m === "full" && module === 1) {
         const harder = result.correct / Math.max(1, questions.length) >= 0.6;
-        setCompleted({ correct: result.correct, total: questions.length, seconds: sessionTime, xp: result.gained });
+        setCompleted({ correct: result.correct, total: questions.length, seconds: sessionTimeRef.current, xp: result.gained });
         setModuleOneSnapshot({ questions: [...questions], answers: { ...answers } });
         // Start the 10-minute break IMMEDIATELY so the user sees it first
         const ends = Date.now() + BREAK_SECONDS * 1000;
@@ -288,6 +314,7 @@ const TestSession = () => {
         setFlagged(new Set());
         setTimeByQuestion({});
         setSessionTime(0);
+        sessionTimeRef.current = 0;
         // Fire-and-forget: load module 2 in background while user is on break.
         // Loading screen will not show because the break screen takes precedence.
         loadQuestions(harder ? "harder" : "easier", 2).catch(() => {});
@@ -417,7 +444,7 @@ const TestSession = () => {
             </div>
             <h2 className="font-display text-3xl font-bold">Mission Complete</h2>
             <p className="text-muted-foreground mt-2 text-sm">
-              You answered <span className="text-foreground font-semibold">{totalCorrect}</span> of {totalQ} correctly in <span className="font-mono">{fmtTime(sessionTime + completed.seconds)}</span>.
+              You answered <span className="text-foreground font-semibold">{totalCorrect}</span> of {totalQ} correctly in <span className="font-mono">{fmtTime(sessionTimeRef.current + completed.seconds)}</span>.
             </p>
             <div className="mt-3 text-xs text-secondary">+{xpEarned + completed.xp} XP · Mistakes routed to your Vault</div>
 
@@ -443,7 +470,12 @@ const TestSession = () => {
 
             {m === "math" ? (
               <div className="mt-6 grid gap-2">
-                <button onClick={() => nav("/test/reading")} className="w-full px-4 py-3 rounded-lg bg-gradient-to-r from-primary to-secondary text-primary-foreground font-semibold">Continue to Reading & Writing</button>
+                <button onClick={() => { window.location.href = "/test/reading"; }} className="w-full px-4 py-3 rounded-lg bg-gradient-to-r from-primary to-secondary text-primary-foreground font-semibold">Continue to Reading & Writing</button>
+                <button onClick={() => nav("/")} className="w-full px-4 py-2.5 rounded-lg border border-border bg-muted/30 text-sm">Back to dashboard</button>
+              </div>
+            ) : m === "reading" ? (
+              <div className="mt-6 grid gap-2">
+                <button onClick={() => { window.location.href = "/test/math"; }} className="w-full px-4 py-3 rounded-lg bg-gradient-to-r from-primary to-secondary text-primary-foreground font-semibold">Continue to Math</button>
                 <button onClick={() => nav("/")} className="w-full px-4 py-2.5 rounded-lg border border-border bg-muted/30 text-sm">Back to dashboard</button>
               </div>
             ) : (
@@ -532,7 +564,7 @@ const TestSession = () => {
               {m === "full" && <span className="text-xs px-2 py-0.5 rounded bg-muted border border-border font-mono">{module === 1 ? "ELA" : "Math"}</span>}
             </div>
             <div className="flex items-center gap-4 text-xs font-mono text-muted-foreground">
-              <span className="flex items-center gap-1.5"><Clock className="h-3.5 w-3.5" /> {fmtTime(Math.max(0, currentLimit - sessionTime))}</span>
+              <span ref={timerDisplayRef} className="flex items-center gap-1.5"><Clock className="h-3.5 w-3.5" /> {fmtTime(Math.max(0, currentLimit - sessionTime))}</span>
               <span>{idx + 1} / {questions.length}</span>
               <button onClick={() => setExitOpen(true)} className="p-1.5 rounded hover:bg-muted" aria-label="Exit"><X className="h-4 w-4" /></button>
             </div>
