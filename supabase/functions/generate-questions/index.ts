@@ -25,10 +25,15 @@ const TOPICS_RW = [
 ];
 
 const AI_URL = "https://openrouter.ai/api/v1/chat/completions";
-const BATCH_SIZE = 6;
-const PRIMARY_BATCH_TIMEOUT_MS = 18_000;
-const FALLBACK_BATCH_TIMEOUT_MS = 15_000;
-const BATCH_CONCURRENCY = 2;
+const BATCH_SIZE = 8;
+const PRIMARY_BATCH_TIMEOUT_MS = 22_000;
+const FALLBACK_BATCH_TIMEOUT_MS = 18_000;
+// Sequential batches to avoid OpenRouter per-second rate limits
+const BATCH_CONCURRENCY = 1;
+const RATE_LIMIT_RETRIES = 2;
+const RATE_LIMIT_BACKOFF_MS = 1500;
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 type DifficultyBias = "balanced" | "easier" | "harder";
 type SectionName = "Math" | "Reading & Writing";
