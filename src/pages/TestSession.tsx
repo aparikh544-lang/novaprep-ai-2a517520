@@ -166,8 +166,17 @@ const TestSession = () => {
         setQuestions(prepareQuestions(filtered.slice(0, targetCount)));
       }
     } catch (e: any) {
-      toast({ title: "Question generation failed", description: e.message ?? "Please try again", variant: "destructive" });
-      nav("/practice");
+      const msg = e?.message ?? "Please try again";
+      const isRateLimit = /rate limit/i.test(msg);
+      toast({
+        title: isRateLimit ? "AI is busy — try again in a few seconds" : "Question generation failed",
+        description: isRateLimit
+          ? "The question generator hit a temporary rate limit. Wait a moment and tap retry."
+          : msg,
+        variant: "destructive",
+      });
+      // Stay on the page with an empty question set so the user can retry
+      setQuestions([]);
     } finally {
       setLoading(false);
       setQStart(Date.now());
