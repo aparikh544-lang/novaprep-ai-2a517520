@@ -1,28 +1,31 @@
-## Switch question generation to Groq
+## Goal
+Make drills/tests generate reliably with OpenRouter and stop failing the whole session when the provider briefly rate-limits a batch.
 
-### Step 0 — Rotate the leaked key (you do this)
-The key you pasted is now public. In the Groq console, **revoke `gsk_VmY7…E3M4`** and create a new one. Don't paste the new key in chat — I'll open a secure secret prompt for it.
+## Plan
+1. Reduce pressure on the provider in `generate-questions`
+   - Lower batch concurrency so the function stops sending overlapping batch requests.
+   - Tune batch sizing/request strategy for large sessions so a 44–54 question module is less likely to trigger provider 429s.
 
-### Step 1 — Store the new key as a backend secret
-I'll request a secret named `GROQ_API_KEY` via the secure secret tool. You paste the freshly rotated key there. It's only readable by edge functions, never exposed to the browser or codebase.
+2. Add resilient retry handling for provider rate limits
+   - Treat OpenRouter 429s as retryable with short backoff instead of immediate hard failure.
+   - Keep the existing model fallback chain, but make it retry safely before giving up.
 
-### Step 2 — Update `supabase/functions/generate-questions/index.ts`
-- Replace the Lovable AI gateway URL with Groq's OpenAI-compatible endpoint: `https://api.groq.com/openai/v1/chat/completions`
-- Swap auth header to use `GROQ_API_KEY`
-- Swap the model fallback chain from Gemini models to Groq models:
-  - Primary: `llama-3.3-70b-versatile` (high quality, fast)
-  - Fallback: `llama-3.1-8b-instant` (ultra-fast safety net)
-- Keep everything else identical: tool-calling schema, batching, concurrency, timeouts, daily cap, JWT auth, CORS. Groq supports OpenAI-style `tools` + `tool_choice`, so the existing `return_questions` function call works as-is.
-- Update the 402 error message (Groq uses different billing language) and keep 429 handling.
+3. Prevent one bad batch from killing the whole session
+   - Return as many valid questions as possible from successful batches.
+   - If the total is short, either top up with smaller follow-up requests or fail only when the session truly cannot reach the minimum usable question count.
 
-### Step 3 — Leave Lovable AI code path removable
-No other function uses `LOVABLE_API_KEY`, so once Groq works you can ignore the Lovable AI balance entirely. The free $1/month will still be there if you ever want to switch back.
+4. Improve the frontend failure path in `TestSession`
+   - Show a clearer user-facing error for temporary provider throttling.
+   - Avoid the current abrupt bounce back to `/practice` when a recoverable generation issue happens.
 
-### Notes
-- Groq's free tier is generous (thousands of requests/day on Llama 3.x) and very fast — usually faster than Gemini Flash.
-- No frontend changes needed; `generate-questions.ts` and all callers stay the same.
-- I won't touch `bump_ai_usage` — your per-user daily cap of 40 calls still applies.
+5. Validate the drill/test flow end-to-end
+   - Re-test the same large generation path that currently fails.
+   - Confirm the response no longer dies on a single OpenRouter 429 and that Math/Reading/full-session requests still return the expected section-specific questions.
 
-### What I need from you before I implement
-1. Confirm you've **rotated** the leaked key in Groq.
-2. Approve this plan — I'll then prompt you to paste the new `GROQ_API_KEY` securely.
+## Technical details
+- Files likely involved:
+  - `supabase/functions/generate-questions/index.ts`
+  - `src/lib/generate-questions.ts`
+  - `src/pages/TestSession.tsx`
+- Root cause confirmed from the live request: POST to `generate-questions` returned `429` with `{"error":"Rate limits exceeded, please try again shortly."}` for a `count: 50` Math request.
+- Constraint respected: do not switch to Groq; keep OpenRouter as the provider.

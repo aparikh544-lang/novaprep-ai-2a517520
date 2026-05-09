@@ -166,8 +166,17 @@ const TestSession = () => {
         setQuestions(prepareQuestions(filtered.slice(0, targetCount)));
       }
     } catch (e: any) {
-      toast({ title: "Question generation failed", description: e.message ?? "Please try again", variant: "destructive" });
-      nav("/practice");
+      const msg = e?.message ?? "Please try again";
+      const isRateLimit = /rate limit/i.test(msg);
+      toast({
+        title: isRateLimit ? "AI is busy — try again in a few seconds" : "Question generation failed",
+        description: isRateLimit
+          ? "The question generator hit a temporary rate limit. Wait a moment and tap retry."
+          : msg,
+        variant: "destructive",
+      });
+      // Stay on the page with an empty question set so the user can retry
+      setQuestions([]);
     } finally {
       setLoading(false);
       setQStart(Date.now());
@@ -366,6 +375,35 @@ const TestSession = () => {
         <div className="relative z-10 flex flex-col items-center gap-4">
           <Loader2 className="h-8 w-8 text-secondary animate-spin" />
           <div className="text-sm text-muted-foreground font-mono">Generating unique questions…</div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!loading && questions.length === 0 && m !== "review") {
+    return (
+      <div className="min-h-screen flex items-center justify-center relative">
+        <div className="starfield" />
+        <div className="relative z-10 flex flex-col items-center gap-4 max-w-md text-center px-6">
+          <AlertTriangle className="h-8 w-8 text-secondary" />
+          <div className="font-display text-xl font-semibold">No questions loaded</div>
+          <div className="text-sm text-muted-foreground">
+            The AI generator hit a temporary issue (often a brief rate limit). Try again in a few seconds.
+          </div>
+          <div className="flex gap-3 mt-2">
+            <button
+              onClick={() => loadQuestions("balanced")}
+              className="px-4 py-2 rounded-lg bg-gradient-to-r from-primary to-secondary text-primary-foreground text-sm font-medium"
+            >
+              Retry
+            </button>
+            <button
+              onClick={() => nav("/practice")}
+              className="px-4 py-2 rounded-lg border border-border bg-muted/30 text-sm font-medium"
+            >
+              Back to Practice
+            </button>
+          </div>
         </div>
       </div>
     );
