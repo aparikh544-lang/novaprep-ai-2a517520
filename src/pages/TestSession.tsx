@@ -380,6 +380,35 @@ const TestSession = () => {
     );
   }
 
+  if (!loading && questions.length === 0 && m !== "review") {
+    return (
+      <div className="min-h-screen flex items-center justify-center relative">
+        <div className="starfield" />
+        <div className="relative z-10 flex flex-col items-center gap-4 max-w-md text-center px-6">
+          <AlertTriangle className="h-8 w-8 text-secondary" />
+          <div className="font-display text-xl font-semibold">No questions loaded</div>
+          <div className="text-sm text-muted-foreground">
+            The AI generator hit a temporary issue (often a brief rate limit). Try again in a few seconds.
+          </div>
+          <div className="flex gap-3 mt-2">
+            <button
+              onClick={() => loadQuestions("balanced")}
+              className="px-4 py-2 rounded-lg bg-gradient-to-r from-primary to-secondary text-primary-foreground text-sm font-medium"
+            >
+              Retry
+            </button>
+            <button
+              onClick={() => nav("/practice")}
+              className="px-4 py-2 rounded-lg border border-border bg-muted/30 text-sm font-medium"
+            >
+              Back to Practice
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const q = questions[idx];
 
   if (done) {
