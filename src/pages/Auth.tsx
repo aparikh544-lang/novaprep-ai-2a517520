@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Rocket } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { lovable } from "@/integrations/lovable";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
 
@@ -149,10 +148,13 @@ const Auth = () => {
           onClick={async () => {
             setBusy(true);
             try {
-              const result = await lovable.auth.signInWithOAuth("google", {
-                redirect_uri: window.location.origin,
+              const { error } = await supabase.auth.signInWithOAuth({
+                provider: "google",
+                options: {
+                  redirectTo: window.location.origin,
+                },
               });
-              if (result.error) throw result.error;
+              if (error) throw error;
             } catch (err: any) {
               toast({ title: "Google sign-in failed", description: err.message ?? "Try again", variant: "destructive" });
               setBusy(false);

@@ -51,7 +51,8 @@ interface Profile {
 
 export type BoxReward =
   | { type: "sp"; amount: number; label: string }
-  | { type: "xp_boost"; multiplier: 2; minutes: number; label: string };
+  | { type: "xp_boost"; multiplier: 2; minutes: number; label: string }
+  | { type: "boost"; kind: BoostKind; label: string; minutes?: number };
 
 export interface SessionSummary {
   id: string;
@@ -130,6 +131,7 @@ interface NovaState {
     reason: ErrorReason;
   }) => Promise<void>;
   awardXP: (difficulty: Difficulty) => Promise<number>;
+  syncProfile: () => Promise<void>;
   recordSession: (s: {
     mode: string;
     score: number;
@@ -178,25 +180,40 @@ export const xpMultiplierFromBoosts = (boosts: ActiveBoost[]) => {
 
 const rewardForTier = (tier: MysteryBox["tier"]): BoxReward => {
   const roll = Math.random();
-  if (tier === "common")
-    return roll < 0.5
-      ? { type: "sp", amount: 5, label: "5 SP" }
-      : { type: "xp_boost", multiplier: 2, minutes: 10, label: "2x XP · 10 min" };
-  if (tier === "rare")
-    return roll < 0.45
-      ? { type: "sp", amount: 10, label: "10 SP" }
-      : roll < 0.9
-        ? { type: "xp_boost", multiplier: 2, minutes: 20, label: "2x XP · 20 min" }
-        : { type: "sp", amount: 20, label: "20 SP" };
-  if (tier === "epic")
-    return roll < 0.45
-      ? { type: "sp", amount: 20, label: "20 SP" }
-      : roll < 0.9
-        ? { type: "xp_boost", multiplier: 2, minutes: 30, label: "2x XP · 30 min" }
-        : { type: "sp", amount: 40, label: "40 SP" };
-  return roll < 0.5
-    ? { type: "sp", amount: 40, label: "40 SP" }
-    : { type: "xp_boost", multiplier: 2, minutes: 60, label: "2x XP · 1 hr" };
+  if (tier === "common") {
+    if (roll < 0.35) return { type: "sp", amount: 5, label: "5 SP" };
+    if (roll < 0.55) return { type: "xp_boost", multiplier: 2, minutes: 10, label: "2x XP · 10 min" };
+    if (roll < 0.70) return { type: "boost", kind: "hint", label: "Hint Token" };
+    if (roll < 0.82) return { type: "boost", kind: "fifty_fifty", label: "50/50 Eliminator" };
+    if (roll < 0.92) return { type: "boost", kind: "streak_freeze", label: "Streak Freeze" };
+    return { type: "boost", kind: "skip_token", label: "Skip Token" };
+  }
+  if (tier === "rare") {
+    if (roll < 0.25) return { type: "sp", amount: 10, label: "10 SP" };
+    if (roll < 0.45) return { type: "xp_boost", multiplier: 2, minutes: 20, label: "2x XP · 20 min" };
+    if (roll < 0.58) return { type: "boost", kind: "fifty_fifty", label: "50/50 Eliminator" };
+    if (roll < 0.70) return { type: "boost", kind: "streak_freeze", label: "Streak Freeze" };
+    if (roll < 0.80) return { type: "boost", kind: "skip_token", label: "Skip Token" };
+    if (roll < 0.90) return { type: "boost", kind: "retry", label: "Retry Token" };
+    return { type: "sp", amount: 20, label: "20 SP" };
+  }
+  if (tier === "epic") {
+    if (roll < 0.20) return { type: "sp", amount: 20, label: "20 SP" };
+    if (roll < 0.40) return { type: "xp_boost", multiplier: 2, minutes: 30, label: "2x XP · 30 min" };
+    if (roll < 0.52) return { type: "boost", kind: "extra_life", label: "Extra Life" };
+    if (roll < 0.64) return { type: "boost", kind: "topic_radar", label: "Topic Radar" };
+    if (roll < 0.76) return { type: "boost", kind: "retry", label: "Retry Token" };
+    if (roll < 0.88) return { type: "boost", kind: "streak_freeze", label: "Streak Freeze" };
+    return { type: "sp", amount: 40, label: "40 SP" };
+  }
+  // Legendary
+  if (roll < 0.15) return { type: "sp", amount: 40, label: "40 SP" };
+  if (roll < 0.35) return { type: "xp_boost", multiplier: 2, minutes: 60, label: "2x XP · 1 hr" };
+  if (roll < 0.50) return { type: "boost", kind: "xp_3x", label: "3x XP · 30 min", minutes: 30 };
+  if (roll < 0.65) return { type: "boost", kind: "extra_life", label: "Extra Life" };
+  if (roll < 0.78) return { type: "boost", kind: "topic_radar", label: "Topic Radar" };
+  if (roll < 0.90) return { type: "boost", kind: "fifty_fifty", label: "50/50 Eliminator" };
+  return { type: "boost", kind: "sp_2x", label: "2x SP · 30 min", minutes: 30 };
 };
 
 const inventoryFromReward = (reward: BoxReward): InventoryItem | null => {
@@ -204,6 +221,15 @@ const inventoryFromReward = (reward: BoxReward): InventoryItem | null => {
     return {
       id: uid(),
       kind: "xp_2x",
+      label: reward.label,
+      minutes: reward.minutes,
+      acquired_at: new Date().toISOString(),
+    };
+  }
+  if (reward.type === "boost") {
+    return {
+      id: uid(),
+      kind: reward.kind,
       label: reward.label,
       minutes: reward.minutes,
       acquired_at: new Date().toISOString(),
@@ -426,7 +452,7 @@ export const useNova = create<NovaState>((set, get) => ({
     const [{ data: updatedBox, error }, { data: updatedProfile }] = await Promise.all([
       supabase
         .from("mystery_boxes")
-        .update({ reward_payload: reward, opened_at: new Date().toISOString(), claimed_at: new Date().toISOString() } as any)
+        .update({ reward_payload: reward as any, opened_at: new Date().toISOString(), claimed_at: new Date().toISOString() } as any)
         .eq("id", boxId)
         .select("id,level_number,tier,upgrade_clicks_used,reward_label,opened_at,claimed_at,reward_payload,created_at,updated_at")
         .single(),
@@ -588,6 +614,18 @@ export const useNova = create<NovaState>((set, get) => ({
     return gained;
   },
 
+  // Force a full profile re-sync from the database
+  syncProfile: async () => {
+    const profile = get().profile;
+    if (!profile) return;
+    const { data } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", profile.id)
+      .maybeSingle();
+    if (data) set({ profile: normalizeProfile(data) });
+  },
+
   recordSession: async ({ mode, score, total, duration, xpEarned }) => {
     const profile = get().profile;
     if (!profile) return;
@@ -629,6 +667,17 @@ export const useNova = create<NovaState>((set, get) => ({
       sessions: data ? [data as SessionSummary, ...state.sessions] : state.sessions,
       profile: normalizeProfile(updatedProfile) ?? state.profile,
     }));
+
+    // Re-fetch profile from DB to get authoritative XP value and sync boxes
+    const { data: freshProfile } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", profile.id)
+      .maybeSingle();
+    if (freshProfile) {
+      set({ profile: normalizeProfile(freshProfile) });
+      await get().syncBoxes();
+    }
   },
 
   resolveMistake: async (id) => {

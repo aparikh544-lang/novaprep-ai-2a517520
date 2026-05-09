@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { Clock, Flag, X, ChevronRight, Rocket, Loader2, AlertTriangle, Coffee, CheckCircle2, XCircle } from "lucide-react";
+import { Clock, Flag, X, ChevronRight, Rocket, Loader as Loader2, TriangleAlert as AlertTriangle, Coffee, CircleCheck as CheckCircle2, Circle as XCircle } from "lucide-react";
 import { Question, ErrorReason, xpForDifficulty } from "@/lib/novaprep-data";
 import { useNova, xpMultiplierFromBoosts } from "@/lib/novaprep-store";
 import { generateQuestions } from "@/lib/generate-questions";
@@ -67,6 +67,7 @@ const TestSession = () => {
   const recordSession = useNova((s) => s.recordSession);
   const resolveMistake = useNova((s) => s.resolveMistake);
   const markTaskComplete = useNova((s) => s.markTaskComplete);
+  const syncProfile = useNova((s) => s.syncProfile);
   const mistakes = useNova((s) => s.mistakes);
   const requestedTopic = searchParams.get("topic") ?? undefined;
   const taskLabel = searchParams.get("task") ?? undefined;
@@ -295,6 +296,8 @@ const TestSession = () => {
         xpEarned: xpEarned + completed.xp + gained,
       });
       if (taskLabel && dayLabel) await markTaskComplete({ taskKey: taskCompletionKey(dayLabel, taskLabel), taskLabel, dayLabel });
+      // Re-sync profile from DB to ensure XP display is accurate everywhere
+      await syncProfile();
     } catch (err: any) {
       // Don't bounce the user back on a sync hiccup — keep the results screen up.
       console.error("recordSession failed", err);

@@ -28,6 +28,7 @@ const Boxes = () => {
   const activeBox = boxes.find((box) => box.id === activeId) ?? null;
 
   const [upgradeFlash, setUpgradeFlash] = useState<{ to: MysteryBox["tier"] } | null>(null);
+  const [tapShake, setTapShake] = useState(false);
 
   const beginOpening = () => {
     if (!unopened.length) return;
@@ -45,6 +46,10 @@ const Boxes = () => {
       if (result.tier !== before) {
         setUpgradeFlash({ to: result.tier });
         window.setTimeout(() => setUpgradeFlash(null), 1100);
+      } else {
+        // No upgrade — show shake feedback so the user knows the tap registered
+        setTapShake(true);
+        window.setTimeout(() => setTapShake(false), 500);
       }
       return;
     }
@@ -96,7 +101,7 @@ const Boxes = () => {
                 onClick={() => onTapBox(activeBox)}
                 disabled={opening || !!lastReward}
                 aria-label={activeBox.upgrade_clicks_used >= 3 ? "Tap to open" : "Tap to upgrade"}
-                className={`mx-auto mt-6 flex h-44 w-44 items-center justify-center rounded-[2rem] border bg-gradient-to-br from-primary/25 to-secondary/25 transition-transform active:scale-95 cursor-pointer ${opening ? "animate-[pulse_0.35s_ease-in-out_infinite] glow-purple" : upgradeFlash ? "glow-purple scale-110 ring-4 ring-primary/60" : "animate-float"}`}
+                className={`mx-auto mt-6 flex h-44 w-44 items-center justify-center rounded-[2rem] border bg-gradient-to-br from-primary/25 to-secondary/25 transition-transform active:scale-95 cursor-pointer ${opening ? "animate-[pulse_0.35s_ease-in-out_infinite] glow-purple" : upgradeFlash ? "glow-purple scale-110 ring-4 ring-primary/60" : tapShake ? "animate-[boxShake_0.4s_ease-in-out]" : "animate-float"}`}
               >
                 <Box className={`h-24 w-24 ${upgradeFlash ? "text-primary-glow" : "text-secondary"}`} />
               </button>
@@ -118,7 +123,7 @@ const Boxes = () => {
 
               {lastReward && (
                 <div className="mt-6 animate-scale-in rounded-xl border border-success/30 bg-success/10 p-4">
-                  {lastReward.type === "sp" ? <Gem className="mx-auto h-7 w-7 text-secondary" /> : <Zap className="mx-auto h-7 w-7 text-warning" />}
+                  {lastReward.type === "sp" ? <Gem className="mx-auto h-7 w-7 text-secondary" /> : lastReward.type === "xp_boost" ? <Zap className="mx-auto h-7 w-7 text-warning" /> : <Sparkles className="mx-auto h-7 w-7 text-primary" />}
                   <div className="mt-2 font-display text-xl font-semibold">{lastReward.label}</div>
                   <p className="text-xs text-muted-foreground mt-1">
                     {lastReward.type === "sp" ? "Added to your SP balance." : "Saved to your Rewards inventory — activate it when ready."}
