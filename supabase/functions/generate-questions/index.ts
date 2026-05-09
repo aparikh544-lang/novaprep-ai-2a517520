@@ -123,7 +123,7 @@ async function requestQuestionBatch(params: {
       signal: controller.signal,
     });
 
-    if (aiResp.status === 429) return { retryable: false as const, error: "Rate limits exceeded, please try again shortly." };
+    if (aiResp.status === 429) return { retryable: true as const, rateLimited: true as const, error: "Rate limits exceeded, please try again shortly." };
     if (aiResp.status === 401 || aiResp.status === 403) return { retryable: false as const, error: "AI provider authentication failed. Check the OPENROUTER_API_KEY secret." };
     if (aiResp.status === 402) return { retryable: false as const, error: "AI credits exhausted on OpenRouter account." };
     if (!aiResp.ok) {
