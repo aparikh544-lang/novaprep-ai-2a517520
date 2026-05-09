@@ -294,10 +294,14 @@ Deno.serve(async (req) => {
       : batchSizes.map(() => 0);
 
     const systemPrompt = buildSystemPrompt();
-    let batchQuestions: GeneratedQuestion[][];
-    try {
-      batchQuestions = await mapWithConcurrency(batchSizes, BATCH_CONCURRENCY, (batchCount, batchIndex) =>
-        generateBatchWithFallback({
+    const collected: GeneratedQuestion[] = [];
+    const batchErrors: string[] = [];
+    // Run sequentially to avoid OpenRouter rate limits, with small inter-batch
+    // delay. Tolerate individual batch failures and return whatever we got.
+    for (let batchIndex = 0; batchIndex < batchSizes.length; batchIndex++) {
+      const batchCount = batchSizes[batchIndex];
+      try {
+        const qs = await generateBatchWithFallback({
           apiKey: OPENROUTER_API_KEY,
           systemPrompt,
           userPrompt: buildUserPrompt({
@@ -310,21 +314,36 @@ Deno.serve(async (req) => {
             batchCount: batchSizes.length,
             sprCount: sprDistribution[batchIndex] ?? 0,
           }),
-        })
-      );
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Question generation failed.";
-      const status = /Rate limits exceeded/i.test(message) ? 429 : /AI credits exhausted/i.test(message) ? 402 : 500;
-      return new Response(JSON.stringify({ error: message }), {
-        status,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+        });
+        collected.push(...qs);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Batch failed";
+        console.error(`Batch ${batchIndex + 1}/${batchSizes.length} failed:`, message);
+        batchErrors.push(message);
+        // Hard-stop only on auth/credit failures — those won't recover
+        if (/authentication failed|credits exhausted/i.test(message)) {
+          if (collected.length === 0) {
+            const status = /credits exhausted/i.test(message) ? 402 : 401;
+            return new Response(JSON.stringify({ error: message }), {
+              status,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
+          }
+          break;
+        }
+      }
+      // Brief pause between batches to ease provider rate limiting
+      if (batchIndex < batchSizes.length - 1) await sleep(400);
     }
 
-    const questions = batchQuestions.flat().slice(0, count);
-    if (!questions.length) {
-      return new Response(JSON.stringify({ error: "Question generation returned no questions." }), {
-        status: 500,
+    const questions = collected.slice(0, count);
+    // Require at least a usable minimum so the session isn't stuck on 1 question
+    const minUsable = Math.min(count, Math.max(4, Math.floor(count * 0.4)));
+    if (questions.length < minUsable) {
+      const message = batchErrors[0] ?? "Question generation returned too few questions.";
+      const status = /Rate limits exceeded/i.test(message) ? 429 : 500;
+      return new Response(JSON.stringify({ error: message }), {
+        status,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
