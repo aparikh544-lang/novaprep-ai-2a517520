@@ -177,15 +177,23 @@ async function generateBatchWithFallback(params: {
 
   let lastError = "AI gateway error";
   for (const attempt of attempts) {
-    const result = await requestQuestionBatch({
-      ...params,
-      model: attempt.model,
-      timeoutMs: attempt.timeoutMs,
-      userPrompt: `${params.userPrompt}${attempt.suffix}`,
-    });
-    if ("questions" in result) return result.questions;
-    lastError = result.error;
-    if (!result.retryable) throw new Error(result.error);
+    for (let tryNum = 0; tryNum <= RATE_LIMIT_RETRIES; tryNum++) {
+      const result = await requestQuestionBatch({
+        ...params,
+        model: attempt.model,
+        timeoutMs: attempt.timeoutMs,
+        userPrompt: `${params.userPrompt}${attempt.suffix}`,
+      });
+      if ("questions" in result) return result.questions;
+      lastError = result.error;
+      // Retry rate limits with backoff before moving to next model
+      if ("rateLimited" in result && result.rateLimited && tryNum < RATE_LIMIT_RETRIES) {
+        await sleep(RATE_LIMIT_BACKOFF_MS * (tryNum + 1));
+        continue;
+      }
+      if (!result.retryable) throw new Error(result.error);
+      break; // try next model
+    }
   }
 
   throw new Error(lastError);
