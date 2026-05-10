@@ -20,6 +20,18 @@ export type BoostKind =
   | "extra_life"
   | "topic_radar";
 
+// Question-time buffs can only be used during a test session, not pre-activated
+export const QUESTION_TIME_BUFFS: BoostKind[] = [
+  "fifty_fifty",
+  "hint",
+  "retry",
+  "extra_life",
+  "skip_token",
+  "topic_radar",
+];
+
+export const isQuestionTimeBoost = (kind: BoostKind) => QUESTION_TIME_BUFFS.includes(kind);
+
 export interface InventoryItem {
   id: string; // uuid in JS
   kind: BoostKind;
@@ -122,6 +134,7 @@ interface NovaState {
   openMysteryBox: (boxId: string) => Promise<BoxReward | null>;
   buyStoreItem: (item: StoreItem) => Promise<boolean>;
   activateInventoryItem: (itemId: string) => Promise<boolean>;
+  consumeInventoryItem: (itemId: string) => Promise<boolean>;
   pruneExpiredBoosts: () => Promise<void>;
   awardFocusXP: (minutes: number) => Promise<number>;
   recordMistake: (m: {
@@ -498,6 +511,9 @@ export const useNova = create<NovaState>((set, get) => ({
     const item = profile.inventory.find((i) => i.id === itemId);
     if (!item) return false;
 
+    // Question-time buffs cannot be pre-activated
+    if (isQuestionTimeBoost(item.kind)) return false;
+
     const liveBoosts = filterLiveBoosts(profile.active_boosts);
     if (liveBoosts.length >= 3) return false;
 
@@ -519,6 +535,27 @@ export const useNova = create<NovaState>((set, get) => ({
     const { data } = await supabase
       .from("profiles")
       .update({ inventory: nextInventory, active_boosts: nextActive } as any)
+      .eq("id", profile.id)
+      .select()
+      .single();
+    if (data) {
+      set({ profile: normalizeProfile(data) });
+      return true;
+    }
+    return false;
+  },
+
+  consumeInventoryItem: async (itemId) => {
+    const profile = get().profile;
+    if (!profile) return false;
+    const item = profile.inventory.find((i) => i.id === itemId);
+    if (!item) return false;
+
+    const nextInventory = profile.inventory.filter((i) => i.id !== itemId);
+
+    const { data } = await supabase
+      .from("profiles")
+      .update({ inventory: nextInventory } as any)
       .eq("id", profile.id)
       .select()
       .single();

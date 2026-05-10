@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { Clock, Flag, X, ChevronRight, Rocket, Loader as Loader2, TriangleAlert as AlertTriangle, Coffee, CircleCheck as CheckCircle2, Circle as XCircle } from "lucide-react";
+import { Clock, Flag, X, ChevronRight, Rocket, Loader as Loader2, TriangleAlert as AlertTriangle, Coffee, CircleCheck as CheckCircle2, Circle as XCircle, Eye, Lightbulb, RefreshCw, Heart, Forward, Compass } from "lucide-react";
 import { Question, ErrorReason, xpForDifficulty } from "@/lib/novaprep-data";
-import { useNova, xpMultiplierFromBoosts } from "@/lib/novaprep-store";
+import { useNova, xpMultiplierFromBoosts, isQuestionTimeBoost, BoostKind, InventoryItem } from "@/lib/novaprep-store";
 import { generateQuestions } from "@/lib/generate-questions";
 import { sanitizeMath } from "@/lib/sanitize-math";
 import { toast } from "@/hooks/use-toast";
@@ -57,6 +57,24 @@ const isCorrectAnswer = (q: Question, answer: AnswerValue | undefined) => {
 };
 const answerIndex = (q: Question, answer: AnswerValue | undefined) => typeof answer === "number" ? answer : q.correct;
 
+const buffIcon: Record<string, any> = {
+  fifty_fifty: Eye,
+  hint: Lightbulb,
+  retry: RefreshCw,
+  extra_life: Heart,
+  skip_token: Forward,
+  topic_radar: Compass,
+};
+
+const buffLabel: Record<string, string> = {
+  fifty_fifty: "50/50",
+  hint: "Hint",
+  retry: "Retry",
+  extra_life: "Extra Life",
+  skip_token: "Skip",
+  topic_radar: "Radar",
+};
+
 const TestSession = () => {
   const { mode = "full" } = useParams();
   const m = mode as Mode;
@@ -69,6 +87,8 @@ const TestSession = () => {
   const markTaskComplete = useNova((s) => s.markTaskComplete);
   const syncProfile = useNova((s) => s.syncProfile);
   const mistakes = useNova((s) => s.mistakes);
+  const inventory = useNova((s) => s.profile?.inventory ?? []);
+  const consumeInventoryItem = useNova((s) => s.consumeInventoryItem);
   const requestedTopic = searchParams.get("topic") ?? undefined;
   const taskLabel = searchParams.get("task") ?? undefined;
   const dayLabel = searchParams.get("day") ?? undefined;
@@ -98,6 +118,11 @@ const TestSession = () => {
   // For full SAT: also retain module-1 (ELA) questions + answers so the answer key has both sections
   const [moduleOneSnapshot, setModuleOneSnapshot] = useState<{ questions: Question[]; answers: Record<string, AnswerValue> } | null>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
+  // Question-time buff state
+  const [eliminatedChoices, setEliminatedChoices] = useState<Set<number>>(new Set());
+  const [hintShown, setHintShown] = useState(false);
+  const [retryUsed, setRetryUsed] = useState(false);
+  const [extraLifeUsed, setExtraLifeUsed] = useState(false);
   const currentLimit = m === "full" ? (module === 1 ? 64 * 60 : 70 * 60) : MODULE_LIMIT[m];
   const exerciseName =
     m === "full" ? "Full SAT Simulation" :
@@ -105,6 +130,75 @@ const TestSession = () => {
     m === "math" ? "Math drill" :
     m === "redemption" ? "Weak-area redemption drill" :
     "Mistake review";
+
+  // Question-time buffs available in inventory
+  const questionBuffs = useMemo(() =>
+    inventory.filter((item) => isQuestionTimeBoost(item.kind)),
+    [inventory]
+  );
+
+  const useBuff = async (kind: BoostKind) => {
+    const item = questionBuffs.find((i) => i.kind === kind);
+    if (!item) return;
+    const q = questions[idx];
+    if (!q) return;
+
+    switch (kind) {
+      case "fifty_fifty": {
+        // Eliminate 2 wrong choices (only for multiple choice with 4 options)
+        if (q.responseType === "spr") {
+          toast({ title: "Can't use 50/50 here", description: "This is a student-produced response question.", variant: "destructive" });
+          return;
+        }
+        const wrongIndices = q.choices.map((_, i) => i).filter((i) => i !== q.correct && !eliminatedChoices.has(i));
+        const toEliminate = wrongIndices.sort(() => Math.random() - 0.5).slice(0, 2);
+        setEliminatedChoices(new Set([...eliminatedChoices, ...toEliminate]));
+        // If current answer is eliminated, clear it
+        if (typeof answers[q.id] === "number" && toEliminate.includes(answers[q.id] as number)) {
+          setAnswers((a) => { const next = { ...a }; delete next[q.id]; return next; });
+        }
+        break;
+      }
+      case "hint": {
+        setHintShown(true);
+        break;
+      }
+      case "retry": {
+        // Allow changing the answer even if already submitted (clear current answer)
+        setRetryUsed(true);
+        if (answers[q.id] !== undefined) {
+          setAnswers((a) => { const next = { ...a }; delete next[q.id]; return next; });
+        }
+        break;
+      }
+      case "extra_life": {
+        setExtraLifeUsed(true);
+        break;
+      }
+      case "skip_token": {
+        // Skip to next question without answering
+        stampTime();
+        if (idx < questions.length - 1) setIdx(idx + 1);
+        else setReviewing(true);
+        break;
+      }
+      case "topic_radar": {
+        toast({ title: "Topic Radar", description: `This question covers: ${q.topic} (${q.difficulty})` });
+        break;
+      }
+    }
+
+    // Consume the item from inventory
+    await consumeInventoryItem(item.id);
+  };
+
+  // Reset per-question buff state when moving to a new question
+  useEffect(() => {
+    setEliminatedChoices(new Set());
+    setHintShown(false);
+    setRetryUsed(false);
+    setExtraLifeUsed(false);
+  }, [idx]);
 
   const cleanExplanation = (text: string) =>
     text
@@ -628,6 +722,13 @@ const TestSession = () => {
               <div className="mt-6 space-y-2.5">
                 {q.choices.map((c, i) => {
                   const isSel = answers[q.id] === i;
+                  const isEliminated = eliminatedChoices.has(i);
+                  if (isEliminated) return (
+                    <div key={i} className="w-full text-left px-4 py-3.5 rounded-lg border border-border/30 bg-muted/10 text-sm flex items-start gap-3 opacity-40 line-through cursor-not-allowed">
+                      <span className="font-mono text-xs text-muted-foreground mt-0.5">{String.fromCharCode(65 + i)}</span>
+                      <span className="flex-1">{renderText(c)}</span>
+                    </div>
+                  );
                   return (
                     <button key={i} onClick={() => setAnswers((a) => ({ ...a, [q.id]: i }))} className={["w-full text-left px-4 py-3.5 rounded-lg border text-sm transition-all flex items-start gap-3", isSel ? "border-primary/60 bg-primary/10" : "border-border bg-muted/30 hover:border-secondary/50 hover:bg-muted/50"].join(" ")}>
                       <span className="font-mono text-xs text-muted-foreground mt-0.5">{String.fromCharCode(65 + i)}</span>
@@ -635,6 +736,44 @@ const TestSession = () => {
                     </button>
                   );
                 })}
+              </div>
+            )}
+
+            {/* Hint display */}
+            {hintShown && q.explanation && (
+              <div className="mt-4 rounded-lg border border-warning/30 bg-warning/5 p-3 text-sm text-muted-foreground">
+                <Lightbulb className="h-4 w-4 text-warning inline mr-1.5" />
+                <span className="font-medium text-warning">Hint:</span> {q.explanation.split(".")[0]}.
+              </div>
+            )}
+
+            {/* Question-time buff bar */}
+            {questionBuffs.length > 0 && (
+              <div className="mt-5 flex items-center gap-2 flex-wrap">
+                <span className="text-[10px] uppercase tracking-widest text-muted-foreground mr-1">Buffs:</span>
+                {(() => {
+                  const buffCounts = new Map<string, InventoryItem[]>();
+                  for (const b of questionBuffs) {
+                    const list = buffCounts.get(b.kind) ?? [];
+                    list.push(b);
+                    buffCounts.set(b.kind, list);
+                  }
+                  return [...buffCounts.entries()].map(([kind, items]) => {
+                    const Icon = buffIcon[kind];
+                    if (!Icon) return null;
+                    return (
+                      <button
+                        key={kind}
+                        onClick={() => useBuff(kind as BoostKind)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-primary/30 bg-primary/10 text-xs font-medium text-primary hover:bg-primary/20 transition-colors"
+                      >
+                        <Icon className="h-3.5 w-3.5" />
+                        {buffLabel[kind] ?? kind}
+                        {items.length > 1 && <span className="text-muted-foreground">x{items.length}</span>}
+                      </button>
+                    );
+                  });
+                })()}
               </div>
             )}
           </div>

@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
-import { Backpack, Zap, Snowflake, Forward, Gem, Sparkles, Lightbulb, Eye, RefreshCw, Heart, Compass } from "lucide-react";
+import { Backpack, Zap, Snowflake, Forward, Gem, Sparkles, Lightbulb, Eye, RefreshCw, Heart, Compass, Gamepad2 } from "lucide-react";
 import { AppLayout } from "@/components/AppLayout";
 import { GlassCard } from "@/components/GlassCard";
-import { useNova, BoostKind } from "@/lib/novaprep-store";
+import { useNova, BoostKind, isQuestionTimeBoost } from "@/lib/novaprep-store";
 import { toast } from "@/hooks/use-toast";
 
 const iconFor: Record<BoostKind, any> = {
@@ -112,6 +112,7 @@ const Inventory = () => {
         <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4">
           {inventory.map((item) => {
             const Icon = iconFor[item.kind];
+            const isQBuff = isQuestionTimeBoost(item.kind);
             return (
               <GlassCard key={item.id}>
                 <div className="flex items-start justify-between">
@@ -126,12 +127,23 @@ const Inventory = () => {
                 {item.minutes && (
                   <p className="text-xs text-muted-foreground mt-1">Lasts {item.minutes} minutes</p>
                 )}
-                <button
-                  onClick={() => onActivate(item.id)}
-                  className="mt-4 w-full rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground"
-                >
-                  Activate
-                </button>
+                {isQBuff ? (
+                  <>
+                    <div className="mt-3 flex items-center gap-1.5 text-xs text-secondary">
+                      <Gamepad2 className="h-3.5 w-3.5" /> Use during a question
+                    </div>
+                    <div className="mt-2 w-full rounded-lg bg-muted/50 border border-border px-3 py-2 text-sm text-muted-foreground text-center">
+                      Available in test session
+                    </div>
+                  </>
+                ) : (
+                  <button
+                    onClick={() => onActivate(item.id)}
+                    className="mt-4 w-full rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground"
+                  >
+                    Activate
+                  </button>
+                )}
               </GlassCard>
             );
           })}

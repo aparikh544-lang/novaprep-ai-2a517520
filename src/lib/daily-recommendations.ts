@@ -31,7 +31,7 @@ const sectionForTopic = (topic: string): DailyTask["section"] => {
 // Cache today's routine in localStorage so completed tasks don't vanish when
 // underlying mistake counts change mid-day.
 const ROUTINE_KEY = "novaprep:daily-routine";
-const ROUTINE_VERSION = 2;
+const ROUTINE_VERSION = 3;
 const todayStr = () => new Date().toISOString().slice(0, 10);
 
 function loadCachedRoutine(): DailyRoutine | null {
@@ -80,15 +80,22 @@ function buildDailyRoutineInner(
   const recentSession = sessions[0];
   const recentAccuracy = recentSession ? recentSession.score / Math.max(1, recentSession.total) : null;
 
+  // Check which diagnostics the user has completed
+  const hasMathDiagnostic = sessions.some((s) => s.mode === "math");
+  const hasReadingDiagnostic = sessions.some((s) => s.mode === "reading");
+  const hasFullSAT = sessions.some((s) => s.mode === "full");
+  const hasBothDiagnostics = (hasMathDiagnostic && hasReadingDiagnostic) || hasFullSAT;
+
   const tasks: DailyTask[] = [];
   let focus: DailyRoutine["focus"] = "Maintenance";
   let headline = "Today's Recommended Plan";
   let subline = "A short, focused routine generated from your latest performance.";
 
-  if (ranked.length === 0) {
+  // New user: no sessions at all — show both diagnostics
+  if (sessions.length === 0) {
     focus = "Maintenance";
     headline = "Build a Baseline";
-    subline = "We need a few sessions to learn your weak spots — start with a balanced warm-up.";
+    subline = "Start with both diagnostics so we can calibrate your personalized plan.";
     tasks.push(
       {
         task: "Diagnostic — Math Sprint",
@@ -110,25 +117,68 @@ function buildDailyRoutineInner(
     return { headline, subline, focus, tasks };
   }
 
+  // Partial diagnostics: user has done one but not the other
+  if (!hasBothDiagnostics) {
+    focus = "Maintenance";
+    headline = "Complete Your Baseline";
+    subline = "Finish both diagnostics so we can build your personalized plan.";
+    if (!hasMathDiagnostic) {
+      tasks.push({
+        task: "Diagnostic — Math Sprint",
+        duration: 70,
+        topic: "Mixed Math",
+        section: "Math",
+        reason: "We need your math baseline to calibrate your plan.",
+        mode: "math",
+      });
+    }
+    if (!hasReadingDiagnostic) {
+      tasks.push({
+        task: "Diagnostic — Reading & Writing",
+        duration: 64,
+        topic: "Mixed RW",
+        section: "Reading & Writing",
+        reason: "We need your reading baseline to calibrate your plan.",
+        mode: "reading",
+      });
+    }
+    // If they have one diagnostic done, also add a targeted task from mistakes
+    if (ranked.length > 0 && tasks.length < 2) {
+      const top = ranked[0];
+      tasks.push({
+        task: `Concept Drill — ${top[0]}`,
+        duration: sectionForTopic(top[0]) === "Math" ? 70 : 32,
+        topic: top[0],
+        section: sectionForTopic(top[0]),
+        reason: `You missed ${top[1].count} ${top[1].count === 1 ? "question" : "questions"} on this topic.`,
+        mode: sectionForTopic(top[0]) === "Math" ? "math" : "reading",
+      });
+    }
+    return { headline, subline, focus, tasks };
+  }
+
+  // Both diagnostics done — adaptive plan based on mistakes
   if (conceptGap >= timePressure) {
     focus = "Concept Fix";
     headline = "Patch Your Weakest Concepts";
-    subline = `Your last sessions show recurring gaps in ${ranked[0][0]}. Today targets those directly.`;
+    subline = `Your last sessions show recurring gaps in ${ranked[0]?.[0] ?? "key topics"}. Today targets those directly.`;
   } else {
     focus = "Time Management";
     headline = "Tighten Your Pacing";
     subline = `Time pressure is your dominant error pattern. Today focuses on fast-recall drills.`;
   }
 
-  const top = ranked[0];
-  tasks.push({
-    task: `Concept Drill — ${top[0]}`,
-    duration: sectionForTopic(top[0]) === "Math" ? 70 : 32,
-    topic: top[0],
-    section: sectionForTopic(top[0]),
-    reason: `You missed ${top[1].count} ${top[1].count === 1 ? "question" : "questions"} on this topic recently.`,
-    mode: sectionForTopic(top[0]) === "Math" ? "math" : "reading",
-  });
+  if (ranked.length > 0) {
+    const top = ranked[0];
+    tasks.push({
+      task: `Concept Drill — ${top[0]}`,
+      duration: sectionForTopic(top[0]) === "Math" ? 70 : 32,
+      topic: top[0],
+      section: sectionForTopic(top[0]),
+      reason: `You missed ${top[1].count} ${top[1].count === 1 ? "question" : "questions"} on this topic recently.`,
+      mode: sectionForTopic(top[0]) === "Math" ? "math" : "reading",
+    });
+  }
 
   if (ranked[1]) {
     const second = ranked[1];
@@ -161,6 +211,18 @@ function buildDailyRoutineInner(
       section: "Mixed",
       reason: "You're outperforming your level. Try harder problems to push your score ceiling.",
       mode: "redemption",
+    });
+  }
+
+  // Fallback if no mistakes and no ranked topics
+  if (tasks.length === 0) {
+    tasks.push({
+      task: "Practice Session",
+      duration: 32,
+      topic: "Mixed",
+      section: "Mixed",
+      reason: "Keep your skills sharp with a balanced practice set.",
+      mode: "math",
     });
   }
 
